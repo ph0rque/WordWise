@@ -1,15 +1,14 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
-import { supabase } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2 } from "lucide-react"
+import { getSupabaseClient } from "@/lib/supabase/client"
 
 export function AuthForm() {
   const [email, setEmail] = useState("")
@@ -24,15 +23,21 @@ export function AuthForm() {
     setError("")
     setMessage("")
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    try {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
 
-    if (error) {
-      setError(error.message)
-    } else {
-      setMessage("Check your email for the confirmation link!")
+      if (error) {
+        setError(error.message)
+      } else {
+        setMessage("Check your email for the confirmation link!")
+      }
+    } catch (err) {
+      setError("Supabase configuration error. Please check your environment variables.")
+      console.error("Supabase error:", err)
     }
     setLoading(false)
   }
@@ -43,13 +48,19 @@ export function AuthForm() {
     setError("")
     setMessage("")
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (error) {
-      setError(error.message)
+      if (error) {
+        setError(error.message)
+      }
+    } catch (err) {
+      setError("Supabase configuration error. Please check your environment variables.")
+      console.error("Supabase error:", err)
     }
     setLoading(false)
   }
@@ -58,7 +69,7 @@ export function AuthForm() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl text-emerald-600">WiseWords</CardTitle>
+          <CardTitle className="text-2xl text-emerald-600">WordWise</CardTitle>
           <CardDescription>Sign in to save and manage your documents</CardDescription>
         </CardHeader>
         <CardContent>

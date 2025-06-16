@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/lib/supabase/client"
+import { getSupabaseClient } from "@/lib/supabase/client"
 import { checkGrammar } from "@/lib/grammar-checker"
 import type { Suggestion, SuggestionType, Document, User as SupabaseUser } from "@/lib/types"
 import { SuggestionCard } from "@/components/suggestion-card"
@@ -73,25 +73,30 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
   // Load user's most recent document on mount
   useEffect(() => {
     const loadInitialDocument = async () => {
-      const { data, error } = await supabase
-        .from("documents")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .single()
+      try {
+        const supabase = getSupabaseClient()
+        const { data, error } = await supabase
+          .from("documents")
+          .select("*")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .single()
 
-      if (error) {
-        // If no documents exist, create a new one
-        if (error.code === "PGRST116") {
-          await createNewDocument()
+        if (error) {
+          // If no documents exist, create a new one
+          if (error.code === "PGRST116") {
+            await createNewDocument()
+          } else {
+            console.error("Error loading document:", error)
+          }
         } else {
-          console.error("Error loading document:", error)
+          // Load the most recent document
+          setCurrentDocument(data)
+          setDocumentTitle(data.title)
+          setText(data.content)
         }
-      } else {
-        // Load the most recent document
-        setCurrentDocument(data)
-        setDocumentTitle(data.title)
-        setText(data.content)
+      } catch (error) {
+        console.error("Error initializing document:", error)
       }
     }
 
@@ -113,45 +118,55 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     setSaving(true)
     console.log("Saving document:", { id: currentDocument.id, title: documentTitle, contentLength: text.length })
 
-    const { data, error } = await supabase
-      .from("documents")
-      .update({
-        title: documentTitle,
-        content: text,
-      })
-      .eq("id", currentDocument.id)
-      .select()
-      .single()
+    try {
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase
+        .from("documents")
+        .update({
+          title: documentTitle,
+          content: text,
+        })
+        .eq("id", currentDocument.id)
+        .select()
+        .single()
 
-    if (error) {
+      if (error) {
+        console.error("Error saving document:", error)
+      } else {
+        console.log("Document saved successfully:", data)
+        setLastSaved(new Date())
+        setCurrentDocument({ ...currentDocument, title: documentTitle, content: text })
+      }
+    } catch (error) {
       console.error("Error saving document:", error)
-    } else {
-      console.log("Document saved successfully:", data)
-      setLastSaved(new Date())
-      setCurrentDocument({ ...currentDocument, title: documentTitle, content: text })
     }
     setSaving(false)
   }
 
   const createNewDocument = async () => {
-    const { data, error } = await supabase
-      .from("documents")
-      .insert([
-        {
-          title: "Untitled Document",
-          content: "",
-          user_id: user.id,
-        },
-      ])
-      .select()
-      .single()
+    try {
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase
+        .from("documents")
+        .insert([
+          {
+            title: "Untitled Document",
+            content: "",
+            user_id: user.id,
+          },
+        ])
+        .select()
+        .single()
 
-    if (error) {
+      if (error) {
+        console.error("Error creating document:", error)
+      } else {
+        setCurrentDocument(data)
+        setDocumentTitle(data.title)
+        setText(data.content)
+      }
+    } catch (error) {
       console.error("Error creating document:", error)
-    } else {
-      setCurrentDocument(data)
-      setDocumentTitle(data.title)
-      setText(data.content)
     }
   }
 

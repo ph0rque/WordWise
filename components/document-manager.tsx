@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase/client"
+import { getSupabaseClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,12 +27,17 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
   }, [])
 
   const fetchDocuments = async () => {
-    const { data, error } = await supabase.from("documents").select("*").order("updated_at", { ascending: false })
+    try {
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase.from("documents").select("*").order("updated_at", { ascending: false })
 
-    if (error) {
+      if (error) {
+        console.error("Error fetching documents:", error)
+      } else {
+        setDocuments(data || [])
+      }
+    } catch (error) {
       console.error("Error fetching documents:", error)
-    } else {
-      setDocuments(data || [])
     }
     setLoading(false)
   }
@@ -40,35 +45,47 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
   const createDocument = async () => {
     if (!newDocTitle.trim()) return
 
-    const { data, error } = await supabase
-      .from("documents")
-      .insert([
-        {
-          title: newDocTitle,
-          content: "",
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-        },
-      ])
-      .select()
-      .single()
+    try {
+      const supabase = getSupabaseClient()
+      const { data: userData } = await supabase.auth.getUser()
 
-    if (error) {
+      const { data, error } = await supabase
+        .from("documents")
+        .insert([
+          {
+            title: newDocTitle,
+            content: "",
+            user_id: userData.user?.id,
+          },
+        ])
+        .select()
+        .single()
+
+      if (error) {
+        console.error("Error creating document:", error)
+      } else {
+        setDocuments([data, ...documents])
+        setNewDocTitle("")
+        setShowNewDocDialog(false)
+        onSelectDocument(data)
+      }
+    } catch (error) {
       console.error("Error creating document:", error)
-    } else {
-      setDocuments([data, ...documents])
-      setNewDocTitle("")
-      setShowNewDocDialog(false)
-      onSelectDocument(data)
     }
   }
 
   const deleteDocument = async (id: string) => {
-    const { error } = await supabase.from("documents").delete().eq("id", id)
+    try {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.from("documents").delete().eq("id", id)
 
-    if (error) {
+      if (error) {
+        console.error("Error deleting document:", error)
+      } else {
+        setDocuments(documents.filter((doc) => doc.id !== id))
+      }
+    } catch (error) {
       console.error("Error deleting document:", error)
-    } else {
-      setDocuments(documents.filter((doc) => doc.id !== id))
     }
   }
 
