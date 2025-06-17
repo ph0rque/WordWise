@@ -31,6 +31,7 @@ import {
   shouldFilterSuggestion,
   applySuggestionToText,
   updateSuggestionPositions,
+  cleanupInvalidSuggestions,
 } from "@/lib/suggestion-utils"
 import type {
   Suggestion,
@@ -87,17 +88,20 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     checkAI()
   }, [])
 
-  // Clean up old actions periodically
+  // Clean up old actions periodically and validate suggestions
   useEffect(() => {
     const cleanup = setInterval(() => {
       const now = Date.now()
       setRecentActions(
         (prev) => prev.filter((action) => now - action.timestamp < 60000), // Keep for 1 minute
       )
+
+      // Clean up invalid suggestions
+      setSuggestions((prev) => cleanupInvalidSuggestions(prev, text))
     }, 30000) // Clean up every 30 seconds
 
     return () => clearInterval(cleanup)
-  }, [])
+  }, [text])
 
   useEffect(() => {
     // Suppress ResizeObserver errors
@@ -362,12 +366,27 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
       setRecentActions((prev) => [...prev, action])
 
       console.log("Suggestion applied successfully")
-    } else {
-      console.error("Failed to apply suggestion:", result.error)
-      setError(`Failed to apply suggestion: ${result.error}`)
 
-      // Remove the problematic suggestion
-      setSuggestions(suggestions.filter((s) => s.id !== suggestion.id))
+      // Clear any error that might have been showing
+      setError("")
+    } else {
+      console.warn("Failed to apply suggestion:", result.error)
+
+      // Don't show error to user for "already changed" cases
+      if (result.error?.includes("not found") || result.error?.includes("already been changed")) {
+        // Just remove the suggestion silently
+        setSuggestions(suggestions.filter((s) => s.id !== suggestion.id))
+        console.log("Suggestion removed - text appears to have been already modified")
+      } else {
+        // Show error for other cases
+        setError(`Failed to apply suggestion: ${result.error}`)
+
+        // Remove the problematic suggestion after a delay
+        setTimeout(() => {
+          setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id))
+          setError("") // Clear error after removing suggestion
+        }, 3000)
+      }
     }
   }
 
