@@ -45,19 +45,21 @@ import type {
 } from "@/lib/types"
 import { SuggestionCard } from "@/components/suggestion-card"
 import { TextStats } from "@/components/text-stats"
-import { DocumentManager } from "@/components/document-manager"
 
 interface TextEditorProps {
   user: SupabaseUser
   onSignOut: () => void
+  refreshDocuments: () => void
+  currentDocument: Document | null
+  setCurrentDocument: (doc: Document | null) => void
+  onSuggestionsPanelPropsChange?: (props: any) => void
 }
 
-export function TextEditor({ user, onSignOut }: TextEditorProps) {
+export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument, setCurrentDocument, onSuggestionsPanelPropsChange }: TextEditorProps) {
   const [text, setText] = useState<string>("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [recentActions, setRecentActions] = useState<SuggestionAction[]>([])
   const [activeTab, setActiveTab] = useState<string>("editor")
-  const [currentDocument, setCurrentDocument] = useState<Document | null>(null)
   const [documentTitle, setDocumentTitle] = useState<string>("Untitled Document")
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
@@ -253,6 +255,15 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
       return
     }
 
+    console.log("Save attempt - Current state:", {
+      currentTitle: currentDocument.title,
+      newTitle: documentTitle,
+      currentContent: currentDocument.content,
+      newContent: text,
+      hasTitleChanged: documentTitle !== currentDocument.title,
+      hasContentChanged: text !== currentDocument.content
+    })
+
     if (text === currentDocument.content && documentTitle === currentDocument.title) {
       console.log("No changes to save")
       return
@@ -282,6 +293,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         setLastSaved(new Date())
         setCurrentDocument({ ...currentDocument, title: documentTitle, content: text })
         setError("")
+        refreshDocuments()
       }
     } catch (error) {
       console.error("Error saving document:", error)
@@ -339,61 +351,57 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     setError("")
   }
 
-  const applySuggestion = (suggestion: Suggestion) => {
+  const applySuggestion = useCallback((suggestion: Suggestion) => {
     console.log("Applying suggestion:", suggestion)
 
-    const result = applySuggestionToText(text, suggestion)
+    setText((prevText) => {
+      const result = applySuggestionToText(prevText, suggestion)
+      if (result.success) {
+        const lengthDelta = suggestion.suggestedText.length - suggestion.originalText.length
 
-    if (result.success) {
-      const lengthDelta = suggestion.suggestedText.length - suggestion.originalText.length
+        // Update positions of remaining suggestions
+        setSuggestions((prevSuggestions) => {
+          const updatedSuggestions = updateSuggestionPositions(
+            prevSuggestions.filter((s) => s.id !== suggestion.id),
+            suggestion.position,
+            lengthDelta,
+          )
+          return updatedSuggestions
+        })
 
-      // Update text
-      setText(result.newText)
+        // Record the action
+        setRecentActions((prev) => [
+          ...prev,
+          {
+            suggestionId: suggestion.id || generateSuggestionId(suggestion),
+            action: "applied",
+            originalText: suggestion.originalText,
+            position: suggestion.position,
+            timestamp: Date.now(),
+          },
+        ])
 
-      // Update positions of remaining suggestions
-      const updatedSuggestions = updateSuggestionPositions(
-        suggestions.filter((s) => s.id !== suggestion.id),
-        suggestion.position,
-        lengthDelta,
-      )
-      setSuggestions(updatedSuggestions)
-
-      // Record the action
-      const action: SuggestionAction = {
-        suggestionId: suggestion.id || generateSuggestionId(suggestion),
-        action: "applied",
-        originalText: suggestion.originalText,
-        position: suggestion.position,
-        timestamp: Date.now(),
-      }
-      setRecentActions((prev) => [...prev, action])
-
-      console.log("Suggestion applied successfully")
-
-      // Clear any error that might have been showing
-      setError("")
-    } else {
-      console.warn("Failed to apply suggestion:", result.error)
-
-      // Don't show error to user for "already changed" cases
-      if (result.error?.includes("not found") || result.error?.includes("already been changed")) {
-        // Just remove the suggestion silently
-        setSuggestions(suggestions.filter((s) => s.id !== suggestion.id))
-        console.log("Suggestion removed - text appears to have been already modified")
+        setError("")
+        return result.newText
       } else {
-        // Show error for other cases
-        setError(`Failed to apply suggestion: ${result.error}`)
-
-        // Remove the problematic suggestion after a delay
-        setTimeout(() => {
-          setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id))
-          setError("") // Clear error after removing suggestion
-        }, 3000)
+        console.warn("Failed to apply suggestion:", result.error)
+        // Don't show error to user for "already changed" cases
+        if (result.error?.includes("not found") || result.error?.includes("already been changed")) {
+          setSuggestions((prevSuggestions) => prevSuggestions.filter((s) => s.id !== suggestion.id))
+          console.log("Suggestion removed - text appears to have been already modified")
+        } else {
+          setError(`Failed to apply suggestion: ${result.error}`)
+          setTimeout(() => {
+            setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id))
+            setError("")
+          }, 3000)
+        }
+        return prevText
       }
-    }
-  }
+    })
+  }, [setText, setSuggestions, setRecentActions, setError])
 
-  const ignoreSuggestion = (suggestion: Suggestion) => {
+  const ignoreSuggestion = useCallback((suggestion: Suggestion) => {
     console.log("Ignoring suggestion:", suggestion)
 
     // Remove the suggestion from the list
@@ -408,20 +416,9 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
       timestamp: Date.now(),
     }
     setRecentActions((prev) => [...prev, action])
-  }
+  }, [suggestions, recentActions])
 
-  const manualGrammarCheck = () => {
-    console.log("Manual grammar check requested")
-    setManualCheckRequested(true)
-    setRecentActions([]) // Clear recent actions to allow re-checking
-    performGrammarCheckLocal(text, true)
-  }
-
-  const getSuggestionCount = (type: SuggestionType) => {
-    return suggestions.filter((s) => s.type === type).length
-  }
-
-  const getIconForType = (type: SuggestionType) => {
+  const getIconForType = useCallback((type: SuggestionType) => {
     switch (type) {
       case "grammar":
         return <AlertCircle className="w-4 h-4 text-red-500" />
@@ -436,6 +433,17 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
       default:
         return null
     }
+  }, [])
+
+  const manualGrammarCheck = () => {
+    console.log("Manual grammar check requested")
+    setManualCheckRequested(true)
+    setRecentActions([]) // Clear recent actions to allow re-checking
+    performGrammarCheckLocal(text, true)
+  }
+
+  const getSuggestionCount = (type: SuggestionType) => {
+    return suggestions.filter((s) => s.type === type).length
   }
 
   const getBadgeVariant = (type: SuggestionType) => {
@@ -476,6 +484,20 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     setIsClient(true)
   }, [])
 
+  useEffect(() => {
+    if (onSuggestionsPanelPropsChange) {
+      onSuggestionsPanelPropsChange({
+        suggestions,
+        aiAvailable,
+        isCheckingGrammar,
+        settings,
+        applySuggestion,
+        ignoreSuggestion,
+        getIconForType,
+      })
+    }
+  }, [suggestions, aiAvailable, isCheckingGrammar, settings, applySuggestion, ignoreSuggestion, getIconForType])
+
   return (
     <div className="space-y-6">
       {/* Error Alert */}
@@ -502,24 +524,9 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
           <h1 className="text-3xl font-bold text-emerald-600">WordWise</h1>
           <p className="mt-1 text-slate-600">Write with confidence. Edit with intelligence.</p>
         </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <User className="w-4 h-4 mr-2" />
-              {user.email}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onSignOut}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign Out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+      <div className="grid gap-6">
         {/* Editor - Takes up 2/3 of the screen */}
         <div className="lg:col-span-1">
           {/* Document Title */}
@@ -740,69 +747,93 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
             </TabsContent>
           </Tabs>
         </div>
-
-        {/* Right Sidebar */}
-        <div className="space-y-6">
-          {/* Suggestions */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-medium">
-              Suggestions {!aiAvailable && <span className="text-sm text-slate-400">(Basic Mode)</span>}
-            </h2>
-            {suggestions.length > 0 ? (
-              <div className="space-y-3">
-                {suggestions.map((suggestion, index) => (
-                  <SuggestionCard
-                    key={suggestion.id || index}
-                    suggestion={suggestion}
-                    onApply={() => applySuggestion(suggestion)}
-                    onIgnore={() => ignoreSuggestion(suggestion)}
-                    icon={getIconForType(suggestion.type)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="p-4 text-center">
-                  {isCheckingGrammar ? (
-                    <div className="py-8">
-                      <div className="w-12 h-12 mx-auto border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
-                      <p className="text-slate-600">Analyzing your text...</p>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {settings.enableAI && aiAvailable ? "AI is checking for improvements" : "Checking for issues"}
-                      </p>
-                    </div>
-                  ) : text.length > 20 ? (
-                    <div className="py-8">
-                      <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
-                      <p className="text-slate-600">Your text looks great!</p>
-                      <p className="text-sm text-slate-500 mt-1">No issues detected.</p>
-                    </div>
-                  ) : (
-                    <div className="py-8">
-                      <Info className="w-12 h-12 mx-auto text-slate-400 mb-2" />
-                      <p className="text-slate-600">Start typing to see suggestions</p>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {aiAvailable
-                          ? "AI will analyze your text as you write."
-                          : "Pattern matching will check your text."}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Document Manager */}
-          <div>
-            <DocumentManager
-              onSelectDocument={selectDocument}
-              onNewDocument={createNewDocument}
-              currentDocumentId={currentDocument?.id}
-            />
-          </div>
-        </div>
       </div>
     </div>
   )
+}
+
+export function SuggestionsPanel({
+  suggestions = [],
+  aiAvailable = false,
+  isCheckingGrammar = false,
+  settings = {
+    enableAI: false,
+    checkGrammar: true,
+    checkSpelling: true,
+    checkStyle: true,
+    checkClarity: true,
+    checkTone: false,
+  },
+  applySuggestion = () => {},
+  ignoreSuggestion = () => {},
+  getIconForType = () => null,
+}: {
+  suggestions?: Suggestion[];
+  aiAvailable?: boolean;
+  isCheckingGrammar?: boolean;
+  settings?: GrammarCheckSettings;
+  applySuggestion?: (suggestion: Suggestion) => void;
+  ignoreSuggestion?: (suggestion: Suggestion) => void;
+  getIconForType?: (type: SuggestionType) => React.ReactNode;
+}) {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-medium">
+        Suggestions {!aiAvailable && <span className="text-sm text-slate-400">(Basic Mode)</span>}
+      </h2>
+      {suggestions.length > 0 ? (
+        <div className="space-y-3">
+          {suggestions.map((suggestion, index) => (
+            <SuggestionCard
+              key={suggestion.id || index}
+              suggestion={suggestion}
+              onApply={() => applySuggestion(suggestion)}
+              onIgnore={() => ignoreSuggestion(suggestion)}
+              icon={getIconForType(suggestion.type)}
+            />
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-4 text-center">
+            {isCheckingGrammar ? (
+              <div className="py-8">
+                <div className="w-12 h-12 mx-auto border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
+                <p className="text-slate-600">Analyzing your text...</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  {settings.enableAI && aiAvailable ? "AI is checking for improvements" : "Checking for issues"}
+                </p>
+              </div>
+            ) : suggestions.length === 0 && (
+              <div className="py-8">
+                <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
+                <p className="text-slate-600">Your text looks great!</p>
+                <p className="text-sm text-slate-500 mt-1">No issues detected.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+export function useSuggestionsPanelProps({
+  suggestions,
+  aiAvailable,
+  isCheckingGrammar,
+  settings,
+  applySuggestion,
+  ignoreSuggestion,
+  getIconForType,
+}: any) {
+  return {
+    suggestions,
+    aiAvailable,
+    isCheckingGrammar,
+    settings,
+    applySuggestion,
+    ignoreSuggestion,
+    getIconForType,
+  };
 }

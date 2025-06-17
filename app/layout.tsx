@@ -4,7 +4,7 @@ import "./globals.css"
 import ClientLayout from "./ClientLayout"
 
 export const metadata: Metadata = {
-  title: "v0 App",
+  title: "WordWise",
   description: "Created with v0",
   generator: "v0.dev",
 }

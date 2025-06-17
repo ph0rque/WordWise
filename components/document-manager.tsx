@@ -13,11 +13,12 @@ import type { Document } from "@/lib/types"
 
 interface DocumentManagerProps {
   onSelectDocument: (document: Document) => void
-  onNewDocument: () => void
+  onNewDocument: (document: Document) => void
   currentDocumentId?: string
+  refreshDocumentsFlag?: number
 }
 
-export function DocumentManager({ onSelectDocument, onNewDocument, currentDocumentId }: DocumentManagerProps) {
+export function DocumentManager({ onSelectDocument, onNewDocument, currentDocumentId, refreshDocumentsFlag }: DocumentManagerProps) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [newDocTitle, setNewDocTitle] = useState("")
@@ -32,7 +33,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
       setLoading(false)
       setError("Supabase is not configured. Please add your environment variables.")
     }
-  }, [])
+  }, [refreshDocumentsFlag])
 
   const createTable = async () => {
     try {
@@ -155,7 +156,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
         setNewDocTitle("")
         setShowNewDocDialog(false)
         setError("")
-        onSelectDocument(data)
+        onNewDocument(data)
       }
     } catch (error) {
       console.error("Error creating document:", error)
@@ -290,7 +291,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
           <div className="p-4 text-center text-slate-500">
             <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No documents yet</p>
-            <Button variant="link" className="text-xs p-0 h-auto mt-1" onClick={onNewDocument}>
+            <Button variant="link" className="text-xs p-0 h-auto mt-1" onClick={() => onNewDocument({} as Document)}>
               Create your first document
             </Button>
           </div>
