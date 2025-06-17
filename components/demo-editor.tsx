@@ -20,21 +20,6 @@ export function DemoEditor() {
   const [activeTab, setActiveTab] = useState<string>("editor")
 
   useEffect(() => {
-    // Suppress ResizeObserver errors
-    const resizeObserverErrorHandler = (e: ErrorEvent) => {
-      if (e.message === "ResizeObserver loop completed with undelivered notifications.") {
-        e.stopImmediatePropagation()
-      }
-    }
-
-    window.addEventListener("error", resizeObserverErrorHandler)
-
-    return () => {
-      window.removeEventListener("error", resizeObserverErrorHandler)
-    }
-  }, [])
-
-  useEffect(() => {
     // Debounce the grammar check to avoid checking on every keystroke
     const timer = setTimeout(() => {
       if (text.trim()) {

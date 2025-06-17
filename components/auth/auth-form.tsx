@@ -40,9 +40,7 @@ export function AuthForm() {
       if (error) {
         setError(error.message)
       } else {
-        setMessage(
-          `Check your email for the confirmation link! Make sure to check your spam folder. The confirmation will redirect you back to ${siteUrl}.`,
-        )
+        setMessage(`Check your email for the confirmation link! Make sure to check your spam folder.`)
       }
     } catch (err) {
       setError("Supabase configuration error. Please check your environment variables.")
@@ -157,31 +155,6 @@ export function AuthForm() {
               <AlertDescription className="text-green-800">{message}</AlertDescription>
             </Alert>
           )}
-
-          {/* Environment Variables Status */}
-          <div className="mt-6 p-3 bg-slate-50 rounded-lg">
-            <h4 className="text-sm font-medium mb-2">Configuration Status:</h4>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span>Supabase URL:</span>
-                <span className={process.env.NEXT_PUBLIC_SUPABASE_URL ? "text-green-600" : "text-red-600"}>
-                  {process.env.NEXT_PUBLIC_SUPABASE_URL ? "✓ Set" : "✗ Missing"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Supabase Anon Key:</span>
-                <span className={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "text-green-600" : "text-red-600"}>
-                  {process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "✓ Set" : "✗ Missing"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Site URL:</span>
-                <span className={process.env.NEXT_PUBLIC_SITE_URL ? "text-green-600" : "text-amber-600"}>
-                  {process.env.NEXT_PUBLIC_SITE_URL ? "✓ Set" : "⚠ Using default"}
-                </span>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

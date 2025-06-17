@@ -12,6 +12,8 @@ import {
   Lightbulb,
   Zap,
   Settings,
+  FileText,
+  BarChart3,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -491,21 +493,9 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Input
-            value={documentTitle}
-            onChange={(e) => setDocumentTitle(e.target.value)}
-            className="text-lg font-medium border-none shadow-none p-0 h-auto focus-visible:ring-0"
-            placeholder="Document title"
-          />
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            {saving && <span>Saving...</span>}
-            {lastSaved && !saving && <span>Saved {lastSaved.toLocaleTimeString()}</span>}
-            <Button variant="outline" size="sm" onClick={saveDocument} disabled={saving}>
-              <Save className="w-4 h-4 mr-1" />
-              Save
-            </Button>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold text-emerald-600">WordWise</h1>
+          <p className="mt-1 text-slate-600">Write with confidence. Edit with intelligence.</p>
         </div>
 
         <DropdownMenu>
@@ -524,23 +514,30 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         </DropdownMenu>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[300px_2fr_1fr]">
-        {/* Document Manager */}
-        <div>
-          <DocumentManager
-            onSelectDocument={selectDocument}
-            onNewDocument={createNewDocument}
-            currentDocumentId={currentDocument?.id}
-          />
-        </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+        {/* Editor - Takes up 2/3 of the screen */}
+        <div className="lg:col-span-1">
+          {/* Document Title */}
+          <h1 className="text-2xl font-bold mb-4">
+            <Input
+              value={documentTitle}
+              onChange={(e) => setDocumentTitle(e.target.value)}
+              className="text-2xl font-bold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
+              placeholder="Document title"
+            />
+          </h1>
 
-        {/* Editor */}
-        <div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex items-center justify-between mb-4">
               <TabsList>
-                <TabsTrigger value="editor">Editor</TabsTrigger>
-                <TabsTrigger value="performance">Performance</TabsTrigger>
+                <TabsTrigger value="editor">
+                  <FileText className="w-4 h-4 mr-1" />
+                  Editor
+                </TabsTrigger>
+                <TabsTrigger value="performance">
+                  <BarChart3 className="w-4 h-4 mr-1" />
+                  Performance
+                </TabsTrigger>
                 <TabsTrigger value="settings">
                   <Settings className="w-4 h-4 mr-1" />
                   Settings
@@ -624,6 +621,18 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                   />
                 </CardContent>
               </Card>
+
+              {/* Save section below text box */}
+              <div className="flex items-center gap-4 mt-4">
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  {saving && <span>Saving...</span>}
+                  {lastSaved && !saving && <span>Saved {lastSaved.toLocaleTimeString()}</span>}
+                </div>
+                <Button variant="outline" size="sm" onClick={saveDocument} disabled={saving}>
+                  <Save className="w-4 h-4 mr-1" />
+                  Save
+                </Button>
+              </div>
             </TabsContent>
 
             <TabsContent value="performance" className="mt-0">
@@ -727,54 +736,66 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
           </Tabs>
         </div>
 
-        {/* Suggestions */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-medium">
-            Suggestions {!aiAvailable && <span className="text-sm text-slate-400">(Basic Mode)</span>}
-          </h2>
-          {suggestions.length > 0 ? (
-            <div className="space-y-3">
-              {suggestions.map((suggestion, index) => (
-                <SuggestionCard
-                  key={suggestion.id || index}
-                  suggestion={suggestion}
-                  onApply={() => applySuggestion(suggestion)}
-                  onIgnore={() => ignoreSuggestion(suggestion)}
-                  icon={getIconForType(suggestion.type)}
-                />
-              ))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-4 text-center">
-                {isCheckingGrammar ? (
-                  <div className="py-8">
-                    <div className="w-12 h-12 mx-auto border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
-                    <p className="text-slate-600">Analyzing your text...</p>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {settings.enableAI && aiAvailable ? "AI is checking for improvements" : "Checking for issues"}
-                    </p>
-                  </div>
-                ) : text.length > 20 ? (
-                  <div className="py-8">
-                    <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
-                    <p className="text-slate-600">Your text looks great!</p>
-                    <p className="text-sm text-slate-500 mt-1">No issues detected.</p>
-                  </div>
-                ) : (
-                  <div className="py-8">
-                    <Info className="w-12 h-12 mx-auto text-slate-400 mb-2" />
-                    <p className="text-slate-600">Start typing to see suggestions</p>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {aiAvailable
-                        ? "AI will analyze your text as you write."
-                        : "Pattern matching will check your text."}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+        {/* Right Sidebar */}
+        <div className="space-y-6">
+          {/* Suggestions */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-medium">
+              Suggestions {!aiAvailable && <span className="text-sm text-slate-400">(Basic Mode)</span>}
+            </h2>
+            {suggestions.length > 0 ? (
+              <div className="space-y-3">
+                {suggestions.map((suggestion, index) => (
+                  <SuggestionCard
+                    key={suggestion.id || index}
+                    suggestion={suggestion}
+                    onApply={() => applySuggestion(suggestion)}
+                    onIgnore={() => ignoreSuggestion(suggestion)}
+                    icon={getIconForType(suggestion.type)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="p-4 text-center">
+                  {isCheckingGrammar ? (
+                    <div className="py-8">
+                      <div className="w-12 h-12 mx-auto border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
+                      <p className="text-slate-600">Analyzing your text...</p>
+                      <p className="text-sm text-slate-500 mt-1">
+                        {settings.enableAI && aiAvailable ? "AI is checking for improvements" : "Checking for issues"}
+                      </p>
+                    </div>
+                  ) : text.length > 20 ? (
+                    <div className="py-8">
+                      <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
+                      <p className="text-slate-600">Your text looks great!</p>
+                      <p className="text-sm text-slate-500 mt-1">No issues detected.</p>
+                    </div>
+                  ) : (
+                    <div className="py-8">
+                      <Info className="w-12 h-12 mx-auto text-slate-400 mb-2" />
+                      <p className="text-slate-600">Start typing to see suggestions</p>
+                      <p className="text-sm text-slate-500 mt-1">
+                        {aiAvailable
+                          ? "AI will analyze your text as you write."
+                          : "Pattern matching will check your text."}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Document Manager */}
+          <div>
+            <DocumentManager
+              onSelectDocument={selectDocument}
+              onNewDocument={createNewDocument}
+              currentDocumentId={currentDocument?.id}
+            />
+          </div>
         </div>
       </div>
     </div>
