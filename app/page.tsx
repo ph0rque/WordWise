@@ -7,6 +7,12 @@ import { DemoEditor } from "@/components/demo-editor"
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client"
 import type { User, Document } from "@/lib/types"
 import { DocumentManager } from "@/components/document-manager"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
@@ -126,9 +132,18 @@ export default function Home() {
           <div className="basis-1/3 flex flex-col items-stretch">
             {/* Email/user info at the top */}
             <div className="flex justify-end mb-6">
-              <div className="bg-white rounded-lg px-4 py-2 shadow flex items-center gap-2">
-                <span className="text-sm text-slate-700">{user.email}</span>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="bg-white rounded-lg px-4 py-2 shadow flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 transition">
+                    {user.email}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {/* Suggestions and My Documents stacked */}
             <div className="space-y-6">

@@ -498,6 +498,18 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
     }
   }, [suggestions, aiAvailable, isCheckingGrammar, settings, applySuggestion, ignoreSuggestion, getIconForType])
 
+  useEffect(() => {
+    if (currentDocument) {
+      setDocumentTitle(currentDocument.title)
+    }
+  }, [currentDocument])
+
+  useEffect(() => {
+    if (currentDocument) {
+      setText(currentDocument.content)
+    }
+  }, [currentDocument])
+
   return (
     <div className="space-y-6">
       {/* Error Alert */}
