@@ -70,7 +70,7 @@ export function AuthForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl text-emerald-600">WordWise</CardTitle>
-          <CardDescription>Sign in to save and manage your documents</CardDescription>
+          <CardDescription>Write with confidence. Edit with intelligence.</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
