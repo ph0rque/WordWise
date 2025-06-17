@@ -2,7 +2,10 @@ import type { Suggestion } from "./types"
 
 // Check if OpenAI API key is available
 function isOpenAIAvailable(): boolean {
-  return !!(process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY)
+  const hasKey = !!(process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY)
+  console.log("OpenAI API key check:", hasKey ? "Available" : "Not available")
+  console.log("Environment check - OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY)
+  return hasKey
 }
 
 export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
@@ -10,7 +13,7 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
     return []
   }
 
-  // Check if OpenAI is available
+  // Check if OpenAI is available first
   if (!isOpenAIAvailable()) {
     console.log("OpenAI API key not found, falling back to basic grammar checker")
     const { checkGrammar } = await import("./grammar-checker")
@@ -18,10 +21,25 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
   }
 
   try {
-    // Dynamic import to avoid loading OpenAI if not needed
-    const { openai } = await import("@ai-sdk/openai")
+    // Dynamic import and create client only when we know the key exists
+    const { createOpenAI } = await import("@ai-sdk/openai")
     const { generateObject } = await import("ai")
     const { z } = await import("zod")
+
+    // Get API key from environment - prioritize the main OPENAI_API_KEY
+    const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY
+    if (!apiKey) {
+      throw new Error("API key not found after availability check")
+    }
+
+    console.log("Using OpenAI API key:", apiKey ? `${apiKey.substring(0, 10)}...` : "Not found")
+
+    console.log("Creating OpenAI client with API key")
+
+    // Create OpenAI client with explicit API key
+    const openai = createOpenAI({
+      apiKey: apiKey,
+    })
 
     const SuggestionSchema = z.object({
       suggestions: z.array(
@@ -35,6 +53,8 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
         }),
       ),
     })
+
+    console.log("Calling OpenAI API for grammar check")
 
     const { object } = await generateObject({
       model: openai("gpt-4o-mini"),
@@ -64,6 +84,8 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
       `,
     })
 
+    console.log("OpenAI API call successful, processing suggestions")
+
     return object.suggestions.map((suggestion) => ({
       type: suggestion.type as any,
       position: suggestion.position,
@@ -75,6 +97,7 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
   } catch (error) {
     console.error("Error checking grammar with AI:", error)
     // Fallback to basic grammar checker
+    console.log("Falling back to basic grammar checker")
     const { checkGrammar } = await import("./grammar-checker")
     return checkGrammar(text)
   }
@@ -88,7 +111,7 @@ export async function checkGrammarStreaming(
     return
   }
 
-  // Check if OpenAI is available
+  // Check if OpenAI is available first
   if (!isOpenAIAvailable()) {
     console.log("OpenAI API key not found, using basic grammar checker")
     const { checkGrammar } = await import("./grammar-checker")
@@ -98,10 +121,23 @@ export async function checkGrammarStreaming(
   }
 
   try {
-    // Dynamic import to avoid loading OpenAI if not needed
-    const { openai } = await import("@ai-sdk/openai")
+    // Dynamic import and create client only when we know the key exists
+    const { createOpenAI } = await import("@ai-sdk/openai")
     const { generateObject } = await import("ai")
     const { z } = await import("zod")
+
+    // Get API key from environment - prioritize the main OPENAI_API_KEY
+    const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY
+    if (!apiKey) {
+      throw new Error("API key not found after availability check")
+    }
+
+    console.log("Using OpenAI API key:", apiKey ? `${apiKey.substring(0, 10)}...` : "Not found")
+
+    // Create OpenAI client with explicit API key
+    const openai = createOpenAI({
+      apiKey: apiKey,
+    })
 
     const SuggestionSchema = z.object({
       suggestions: z.array(
