@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { checkGrammar } from "@/lib/grammar-checker"
 import type { Suggestion, SuggestionType, Document, User as SupabaseUser } from "@/lib/types"
@@ -29,6 +30,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
   const [documentTitle, setDocumentTitle] = useState<string>("Untitled Document")
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [error, setError] = useState<string>("")
 
   useEffect(() => {
     // Suppress ResizeObserver errors
@@ -61,7 +63,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
 
   // Auto-save functionality
   useEffect(() => {
-    if (currentDocument && text !== currentDocument.content && text.trim() !== "") {
+    if (currentDocument && (text !== currentDocument.content || documentTitle !== currentDocument.title)) {
       const timer = setTimeout(() => {
         saveDocument()
       }, 2000) // Auto-save after 2 seconds of inactivity
@@ -85,18 +87,23 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         if (error) {
           // If no documents exist, create a new one
           if (error.code === "PGRST116") {
+            console.log("No documents found, creating first document")
             await createNewDocument()
           } else {
             console.error("Error loading document:", error)
+            setError(`Failed to load documents: ${error.message}`)
           }
         } else {
           // Load the most recent document
+          console.log("Loading document:", data)
           setCurrentDocument(data)
           setDocumentTitle(data.title)
           setText(data.content)
+          setError("")
         }
       } catch (error) {
         console.error("Error initializing document:", error)
+        setError("Failed to initialize. Please check your Supabase configuration.")
       }
     }
 
@@ -116,6 +123,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     }
 
     setSaving(true)
+    setError("")
     console.log("Saving document:", { id: currentDocument.id, title: documentTitle, contentLength: text.length })
 
     try {
@@ -132,13 +140,16 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
 
       if (error) {
         console.error("Error saving document:", error)
+        setError(`Failed to save: ${error.message}`)
       } else {
         console.log("Document saved successfully:", data)
         setLastSaved(new Date())
         setCurrentDocument({ ...currentDocument, title: documentTitle, content: text })
+        setError("")
       }
     } catch (error) {
       console.error("Error saving document:", error)
+      setError("Failed to save document. Please try again.")
     }
     setSaving(false)
   }
@@ -146,6 +157,9 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
   const createNewDocument = async () => {
     try {
       const supabase = getSupabaseClient()
+
+      console.log("Creating new document for user:", user.id)
+
       const { data, error } = await supabase
         .from("documents")
         .insert([
@@ -160,13 +174,17 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
 
       if (error) {
         console.error("Error creating document:", error)
+        setError(`Failed to create document: ${error.message}`)
       } else {
+        console.log("Document created successfully:", data)
         setCurrentDocument(data)
         setDocumentTitle(data.title)
         setText(data.content)
+        setError("")
       }
     } catch (error) {
       console.error("Error creating document:", error)
+      setError("Failed to create document. Please check your Supabase configuration.")
     }
   }
 
@@ -176,6 +194,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     setDocumentTitle(document.title)
     setText(document.content)
     setLastSaved(null) // Reset last saved time when switching documents
+    setError("")
   }
 
   const applySuggestion = (suggestion: Suggestion) => {
@@ -208,6 +227,14 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
 
   return (
     <div className="space-y-6">
+      {/* Error Alert */}
+      {error && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-red-800">{error}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

@@ -16,6 +16,7 @@ export default function Home() {
     const initializeAuth = async () => {
       // Check if Supabase is configured
       if (!isSupabaseConfigured()) {
+        console.log("Supabase not configured, showing demo mode")
         setSupabaseAvailable(false)
         setLoading(false)
         return
@@ -24,17 +25,21 @@ export default function Home() {
       try {
         const supabase = getSupabaseClient()
         setSupabaseAvailable(true)
+        console.log("Supabase configured, initializing auth...")
 
         // Get initial session
         const {
           data: { session },
         } = await supabase.auth.getSession()
+
+        console.log("Current session:", session?.user?.email || "No user")
         setUser(session?.user ? { id: session.user.id, email: session.user.email! } : null)
 
         // Listen for auth changes
         const {
           data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
+          console.log("Auth state changed:", session?.user?.email || "No user")
           setUser(session?.user ? { id: session.user.id, email: session.user.email! } : null)
         })
 
@@ -54,6 +59,7 @@ export default function Home() {
     try {
       const supabase = getSupabaseClient()
       await supabase.auth.signOut()
+      console.log("User signed out")
     } catch (error) {
       console.error("Sign out error:", error)
     }
@@ -69,19 +75,22 @@ export default function Home() {
 
   // If Supabase is not configured, show demo mode
   if (!supabaseAvailable) {
+    console.log("Showing demo editor")
     return <DemoEditor />
   }
 
   if (!user) {
+    console.log("No user, showing auth form")
     return <AuthForm />
   }
 
+  console.log("User authenticated, showing main app")
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       <div className="container max-w-7xl px-4 py-8 mx-auto">
         <header className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-emerald-600">WordWise</h1>
-          <p className="mt-2 text-slate-600">Write with confidence</p>
+          <p className="mt-2 text-slate-600">Write with confidence. Edit with intelligence.</p>
         </header>
 
         <TextEditor user={user} onSignOut={handleSignOut} />

@@ -81,7 +81,7 @@ export function DemoEditor() {
       <div className="container max-w-7xl px-4 py-8 mx-auto">
         <header className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-emerald-600">WordWise</h1>
-          <p className="mt-2 text-slate-600">Write with confidence</p>
+          <p className="mt-2 text-slate-600">Write with confidence. Edit with intelligence.</p>
         </header>
 
         <Alert className="mb-6 border-blue-200 bg-blue-50">
