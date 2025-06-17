@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2 } from "lucide-react"
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { getSupabaseClient } from "@/lib/supabase/client"
 
 export function AuthForm() {
@@ -25,15 +25,24 @@ export function AuthForm() {
 
     try {
       const supabase = getSupabaseClient()
+
+      // Get the current site URL for the confirmation redirect
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+
       const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${siteUrl}/auth/callback`,
+        },
       })
 
       if (error) {
         setError(error.message)
       } else {
-        setMessage("Check your email for the confirmation link!")
+        setMessage(
+          `Check your email for the confirmation link! Make sure to check your spam folder. The confirmation will redirect you back to ${siteUrl}.`,
+        )
       }
     } catch (err) {
       setError("Supabase configuration error. Please check your environment variables.")
@@ -137,15 +146,42 @@ export function AuthForm() {
 
           {error && (
             <Alert className="mt-4 border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-red-800">{error}</AlertDescription>
             </Alert>
           )}
 
           {message && (
             <Alert className="mt-4 border-green-200 bg-green-50">
+              <CheckCircle2 className="h-4 w-4" />
               <AlertDescription className="text-green-800">{message}</AlertDescription>
             </Alert>
           )}
+
+          {/* Environment Variables Status */}
+          <div className="mt-6 p-3 bg-slate-50 rounded-lg">
+            <h4 className="text-sm font-medium mb-2">Configuration Status:</h4>
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span>Supabase URL:</span>
+                <span className={process.env.NEXT_PUBLIC_SUPABASE_URL ? "text-green-600" : "text-red-600"}>
+                  {process.env.NEXT_PUBLIC_SUPABASE_URL ? "✓ Set" : "✗ Missing"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Supabase Anon Key:</span>
+                <span className={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "text-green-600" : "text-red-600"}>
+                  {process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "✓ Set" : "✗ Missing"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Site URL:</span>
+                <span className={process.env.NEXT_PUBLIC_SITE_URL ? "text-green-600" : "text-amber-600"}>
+                  {process.env.NEXT_PUBLIC_SITE_URL ? "✓ Set" : "⚠ Using default"}
+                </span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
