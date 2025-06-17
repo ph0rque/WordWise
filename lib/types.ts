@@ -7,6 +7,7 @@ export interface Suggestion {
   suggestedText: string
   explanation: string
   severity?: "low" | "medium" | "high"
+  id?: string // Add unique ID for tracking
 }
 
 export interface Document {
@@ -30,4 +31,13 @@ export interface GrammarCheckSettings {
   checkStyle: boolean
   checkClarity: boolean
   checkTone: boolean
+}
+
+// New interface for tracking suggestion actions
+export interface SuggestionAction {
+  suggestionId: string
+  action: "applied" | "ignored"
+  originalText: string
+  position: number
+  timestamp: number
 }

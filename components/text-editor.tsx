@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   AlertCircle,
   CheckCircle2,
@@ -26,7 +26,20 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { checkGrammar } from "@/lib/grammar-checker"
 import { checkAIAvailability, performGrammarCheck } from "@/lib/client-grammar-checker"
-import type { Suggestion, SuggestionType, Document, User as SupabaseUser, GrammarCheckSettings } from "@/lib/types"
+import {
+  generateSuggestionId,
+  shouldFilterSuggestion,
+  applySuggestionToText,
+  updateSuggestionPositions,
+} from "@/lib/suggestion-utils"
+import type {
+  Suggestion,
+  SuggestionType,
+  SuggestionAction,
+  Document,
+  User as SupabaseUser,
+  GrammarCheckSettings,
+} from "@/lib/types"
 import { SuggestionCard } from "@/components/suggestion-card"
 import { TextStats } from "@/components/text-stats"
 import { DocumentManager } from "@/components/document-manager"
@@ -39,6 +52,7 @@ interface TextEditorProps {
 export function TextEditor({ user, onSignOut }: TextEditorProps) {
   const [text, setText] = useState<string>("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [recentActions, setRecentActions] = useState<SuggestionAction[]>([])
   const [activeTab, setActiveTab] = useState<string>("editor")
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null)
   const [documentTitle, setDocumentTitle] = useState<string>("Untitled Document")
@@ -47,8 +61,12 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
   const [error, setError] = useState<string>("")
   const [isCheckingGrammar, setIsCheckingGrammar] = useState(false)
   const [aiAvailable, setAiAvailable] = useState(false)
+  const [lastCheckedText, setLastCheckedText] = useState<string>("")
+  const [manualCheckRequested, setManualCheckRequested] = useState(false)
+  const grammarCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   const [settings, setSettings] = useState<GrammarCheckSettings>({
-    enableAI: false, // Default to false until we confirm AI is available
+    enableAI: false,
     checkGrammar: true,
     checkSpelling: true,
     checkStyle: true,
@@ -62,12 +80,23 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
       const available = await checkAIAvailability()
       console.log("AI availability check result:", available)
       setAiAvailable(available)
-      // Only enable AI if it's actually available
       if (available) {
         setSettings((prev) => ({ ...prev, enableAI: true }))
       }
     }
     checkAI()
+  }, [])
+
+  // Clean up old actions periodically
+  useEffect(() => {
+    const cleanup = setInterval(() => {
+      const now = Date.now()
+      setRecentActions(
+        (prev) => prev.filter((action) => now - action.timestamp < 60000), // Keep for 1 minute
+      )
+    }, 30000) // Clean up every 30 seconds
+
+    return () => clearInterval(cleanup)
   }, [])
 
   useEffect(() => {
@@ -86,37 +115,81 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
   }, [])
 
   const performGrammarCheckLocal = useCallback(
-    async (textToCheck: string) => {
+    async (textToCheck: string, forceCheck = false) => {
       if (!textToCheck.trim() || textToCheck.length < 10) {
         setSuggestions([])
+        setLastCheckedText("")
         return
       }
 
+      // Don't recheck if text hasn't changed significantly and no manual check was requested
+      if (!forceCheck && !manualCheckRequested) {
+        const textDiff = Math.abs(textToCheck.length - lastCheckedText.length)
+        const hasSignificantChange = textDiff > 10 || textToCheck.trim() !== lastCheckedText.trim()
+
+        if (!hasSignificantChange) {
+          console.log("Skipping grammar check - no significant changes")
+          return
+        }
+      }
+
       setIsCheckingGrammar(true)
+      setManualCheckRequested(false)
 
       try {
-        // Use the API-based grammar check
+        console.log("Performing grammar check...")
         const result = await performGrammarCheck(textToCheck, settings)
-        setSuggestions(result.suggestions)
+
+        // Add unique IDs to suggestions and filter based on recent actions
+        const suggestionsWithIds = result.suggestions.map((suggestion) => ({
+          ...suggestion,
+          id: generateSuggestionId(suggestion),
+        }))
+
+        // Filter out suggestions that were recently acted upon
+        const filteredSuggestions = suggestionsWithIds.filter(
+          (suggestion) => !shouldFilterSuggestion(suggestion, recentActions, textToCheck),
+        )
+
+        console.log(
+          `Grammar check complete: ${result.suggestions.length} total, ${filteredSuggestions.length} after filtering`,
+        )
+
+        setSuggestions(filteredSuggestions)
+        setLastCheckedText(textToCheck)
       } catch (error) {
         console.error("Grammar check failed:", error)
         // Fallback to basic checking
         const basicResults = checkGrammar(textToCheck)
-        setSuggestions(basicResults)
+        const basicWithIds = basicResults.map((suggestion) => ({
+          ...suggestion,
+          id: generateSuggestionId(suggestion),
+        }))
+        setSuggestions(basicWithIds)
+        setLastCheckedText(textToCheck)
       } finally {
         setIsCheckingGrammar(false)
       }
     },
-    [settings],
+    [settings, recentActions, lastCheckedText, manualCheckRequested],
   )
 
   useEffect(() => {
-    // Debounce the grammar check to avoid checking on every keystroke
-    const timer = setTimeout(() => {
-      performGrammarCheckLocal(text)
-    }, 1000) // Increased delay for API calls
+    // Clear any existing timeout
+    if (grammarCheckTimeoutRef.current) {
+      clearTimeout(grammarCheckTimeoutRef.current)
+    }
 
-    return () => clearTimeout(timer)
+    // Debounce the grammar check
+    grammarCheckTimeoutRef.current = setTimeout(() => {
+      performGrammarCheckLocal(text, false)
+    }, 1500) // Increased delay to reduce API calls
+
+    return () => {
+      if (grammarCheckTimeoutRef.current) {
+        clearTimeout(grammarCheckTimeoutRef.current)
+      }
+    }
   }, [text, performGrammarCheckLocal])
 
   // Auto-save functionality
@@ -124,7 +197,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     if (currentDocument && (text !== currentDocument.content || documentTitle !== currentDocument.title)) {
       const timer = setTimeout(() => {
         saveDocument()
-      }, 2000) // Auto-save after 2 seconds of inactivity
+      }, 2000)
 
       return () => clearTimeout(timer)
     }
@@ -143,7 +216,6 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
           .single()
 
         if (error) {
-          // If no documents exist, create a new one
           if (error.code === "PGRST116") {
             console.log("No documents found, creating first document")
             await createNewDocument()
@@ -152,11 +224,11 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
             setError(`Failed to load documents: ${error.message}`)
           }
         } else {
-          // Load the most recent document
           console.log("Loading document:", data)
           setCurrentDocument(data)
           setDocumentTitle(data.title)
           setText(data.content)
+          setLastCheckedText(data.content) // Initialize last checked text
           setError("")
         }
       } catch (error) {
@@ -174,7 +246,6 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
       return
     }
 
-    // Don't save if nothing has changed
     if (text === currentDocument.content && documentTitle === currentDocument.title) {
       console.log("No changes to save")
       return
@@ -238,6 +309,9 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         setCurrentDocument(data)
         setDocumentTitle(data.title)
         setText(data.content)
+        setLastCheckedText("") // Reset last checked text
+        setSuggestions([]) // Clear suggestions
+        setRecentActions([]) // Clear recent actions
         setError("")
       }
     } catch (error) {
@@ -251,26 +325,74 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     setCurrentDocument(document)
     setDocumentTitle(document.title)
     setText(document.content)
-    setLastSaved(null) // Reset last saved time when switching documents
+    setLastCheckedText(document.content) // Set last checked text
+    setLastSaved(null)
+    setSuggestions([]) // Clear suggestions when switching documents
+    setRecentActions([]) // Clear recent actions
     setError("")
   }
 
   const applySuggestion = (suggestion: Suggestion) => {
-    const before = text.substring(0, suggestion.position)
-    const after = text.substring(suggestion.position + suggestion.originalText.length)
-    setText(before + suggestion.suggestedText + after)
+    console.log("Applying suggestion:", suggestion)
 
-    // Remove the applied suggestion
-    setSuggestions(
-      suggestions.filter((s) => !(s.position === suggestion.position && s.originalText === suggestion.originalText)),
-    )
+    const result = applySuggestionToText(text, suggestion)
+
+    if (result.success) {
+      const lengthDelta = suggestion.suggestedText.length - suggestion.originalText.length
+
+      // Update text
+      setText(result.newText)
+
+      // Update positions of remaining suggestions
+      const updatedSuggestions = updateSuggestionPositions(
+        suggestions.filter((s) => s.id !== suggestion.id),
+        suggestion.position,
+        lengthDelta,
+      )
+      setSuggestions(updatedSuggestions)
+
+      // Record the action
+      const action: SuggestionAction = {
+        suggestionId: suggestion.id || generateSuggestionId(suggestion),
+        action: "applied",
+        originalText: suggestion.originalText,
+        position: suggestion.position,
+        timestamp: Date.now(),
+      }
+      setRecentActions((prev) => [...prev, action])
+
+      console.log("Suggestion applied successfully")
+    } else {
+      console.error("Failed to apply suggestion:", result.error)
+      setError(`Failed to apply suggestion: ${result.error}`)
+
+      // Remove the problematic suggestion
+      setSuggestions(suggestions.filter((s) => s.id !== suggestion.id))
+    }
   }
 
   const ignoreSuggestion = (suggestion: Suggestion) => {
-    // Remove the ignored suggestion from the suggestions list
-    setSuggestions(
-      suggestions.filter((s) => !(s.position === suggestion.position && s.originalText === suggestion.originalText)),
-    )
+    console.log("Ignoring suggestion:", suggestion)
+
+    // Remove the suggestion from the list
+    setSuggestions(suggestions.filter((s) => s.id !== suggestion.id))
+
+    // Record the action
+    const action: SuggestionAction = {
+      suggestionId: suggestion.id || generateSuggestionId(suggestion),
+      action: "ignored",
+      originalText: suggestion.originalText,
+      position: suggestion.position,
+      timestamp: Date.now(),
+    }
+    setRecentActions((prev) => [...prev, action])
+  }
+
+  const manualGrammarCheck = () => {
+    console.log("Manual grammar check requested")
+    setManualCheckRequested(true)
+    setRecentActions([]) // Clear recent actions to allow re-checking
+    performGrammarCheckLocal(text, true)
   }
 
   const getSuggestionCount = (type: SuggestionType) => {
@@ -577,11 +699,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={() => performGrammarCheckLocal(text)}
-                    disabled={isCheckingGrammar}
-                    className="w-full"
-                  >
+                  <Button onClick={manualGrammarCheck} disabled={isCheckingGrammar} className="w-full">
                     {isCheckingGrammar ? "Checking..." : "Re-check Document"}
                   </Button>
                 </CardContent>
@@ -599,7 +717,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
             <div className="space-y-3">
               {suggestions.map((suggestion, index) => (
                 <SuggestionCard
-                  key={index}
+                  key={suggestion.id || index}
                   suggestion={suggestion}
                   onApply={() => applySuggestion(suggestion)}
                   onIgnore={() => ignoreSuggestion(suggestion)}
