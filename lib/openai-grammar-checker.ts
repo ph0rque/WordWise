@@ -2,9 +2,9 @@ import type { Suggestion } from "./types"
 
 // Check if OpenAI is available on the server (this will be called from API routes)
 export function isOpenAIAvailable(): boolean {
-  // Only check server-side environment variable
-  const hasKey = !!process.env.OPENAI_API_KEY
-  console.log("OpenAI API key check (server-side):", hasKey ? "Available" : "Not available")
+  // Check both client and server environment variables
+  const hasKey = !!(process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY)
+  console.log("OpenAI API key check:", hasKey ? "Available" : "Not available")
   return hasKey
 }
 
@@ -26,8 +26,8 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
     const { generateObject } = await import("ai")
     const { z } = await import("zod")
 
-    // Get API key from server environment only
-    const apiKey = process.env.OPENAI_API_KEY
+    // Get API key from either environment
+    const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY
     if (!apiKey) {
       throw new Error("API key not found after availability check")
     }

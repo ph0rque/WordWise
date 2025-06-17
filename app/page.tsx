@@ -88,13 +88,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       <div className="container max-w-7xl px-4 py-8 mx-auto">
-        <header className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-emerald-600">WordWise</h1>
-          <p className="mt-2 text-slate-600">Write with confidence. Edit with intelligence.</p>
-        </header>
-
         <TextEditor user={user} onSignOut={handleSignOut} />
-
         <footer className="mt-16 text-center text-sm text-slate-500">
           <p>© 2025 WordWise. A simplified Grammarly clone with document storage.</p>
         </footer>
