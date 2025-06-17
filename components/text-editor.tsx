@@ -624,14 +624,14 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
 
               {/* Save section below text box */}
               <div className="flex items-center gap-4 mt-4">
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  {saving && <span>Saving...</span>}
-                  {lastSaved && !saving && <span>Saved {lastSaved.toLocaleTimeString()}</span>}
-                </div>
                 <Button variant="outline" size="sm" onClick={saveDocument} disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
                   Save
                 </Button>
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  {saving && <span>Saving...</span>}
+                  {lastSaved && !saving && <span className="italic">Saved {lastSaved.toLocaleTimeString()}</span>}
+                </div>
               </div>
             </TabsContent>
 
