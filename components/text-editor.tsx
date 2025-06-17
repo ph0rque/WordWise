@@ -1,18 +1,32 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { AlertCircle, CheckCircle2, AlertTriangle, Info, Save, User, LogOut } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import {
+  AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  Save,
+  User,
+  LogOut,
+  Lightbulb,
+  Zap,
+  Settings,
+} from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { checkGrammar } from "@/lib/grammar-checker"
-import type { Suggestion, SuggestionType, Document, User as SupabaseUser } from "@/lib/types"
+import { checkGrammarWithAI, isOpenAIAvailable } from "@/lib/openai-grammar-checker"
+import type { Suggestion, SuggestionType, Document, User as SupabaseUser, GrammarCheckSettings } from "@/lib/types"
 import { SuggestionCard } from "@/components/suggestion-card"
 import { TextStats } from "@/components/text-stats"
 import { DocumentManager } from "@/components/document-manager"
@@ -31,6 +45,26 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [error, setError] = useState<string>("")
+  const [isCheckingGrammar, setIsCheckingGrammar] = useState(false)
+  const [aiAvailable, setAiAvailable] = useState(false)
+  const [settings, setSettings] = useState<GrammarCheckSettings>({
+    enableAI: false, // Default to false until we confirm AI is available
+    checkGrammar: true,
+    checkSpelling: true,
+    checkStyle: true,
+    checkClarity: true,
+    checkTone: false,
+  })
+
+  // Check AI availability on mount
+  useEffect(() => {
+    const checkAI = () => {
+      const available = isOpenAIAvailable()
+      setAiAvailable(available)
+      setSettings((prev) => ({ ...prev, enableAI: available }))
+    }
+    checkAI()
+  }, [])
 
   useEffect(() => {
     // Suppress ResizeObserver errors
@@ -47,19 +81,65 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     }
   }, [])
 
+  const performGrammarCheck = useCallback(
+    async (textToCheck: string) => {
+      if (!textToCheck.trim() || textToCheck.length < 10) {
+        setSuggestions([])
+        return
+      }
+
+      setIsCheckingGrammar(true)
+
+      try {
+        let results: Suggestion[] = []
+
+        if (settings.enableAI && aiAvailable) {
+          // Use AI-powered grammar checking
+          results = await checkGrammarWithAI(textToCheck)
+        } else {
+          // Use basic pattern-based checking
+          results = checkGrammar(textToCheck)
+        }
+
+        // Filter suggestions based on settings
+        const filteredResults = results.filter((suggestion) => {
+          switch (suggestion.type) {
+            case "grammar":
+              return settings.checkGrammar
+            case "spelling":
+              return settings.checkSpelling
+            case "style":
+              return settings.checkStyle
+            case "clarity":
+              return settings.checkClarity
+            case "tone":
+              return settings.checkTone
+            default:
+              return true
+          }
+        })
+
+        setSuggestions(filteredResults)
+      } catch (error) {
+        console.error("Grammar check failed:", error)
+        // Fallback to basic checking
+        const basicResults = checkGrammar(textToCheck)
+        setSuggestions(basicResults)
+      } finally {
+        setIsCheckingGrammar(false)
+      }
+    },
+    [settings, aiAvailable],
+  )
+
   useEffect(() => {
     // Debounce the grammar check to avoid checking on every keystroke
     const timer = setTimeout(() => {
-      if (text.trim()) {
-        const results = checkGrammar(text)
-        setSuggestions(results)
-      } else {
-        setSuggestions([])
-      }
-    }, 500)
+      performGrammarCheck(text)
+    }, 1000) // Increased delay for AI calls
 
     return () => clearTimeout(timer)
-  }, [text])
+  }, [text, performGrammarCheck])
 
   // Auto-save functionality
   useEffect(() => {
@@ -220,8 +300,46 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         return <AlertTriangle className="w-4 h-4 text-amber-500" />
       case "style":
         return <Info className="w-4 h-4 text-blue-500" />
+      case "clarity":
+        return <Lightbulb className="w-4 h-4 text-purple-500" />
+      case "tone":
+        return <Zap className="w-4 h-4 text-green-500" />
       default:
         return null
+    }
+  }
+
+  const getBadgeVariant = (type: SuggestionType) => {
+    switch (type) {
+      case "grammar":
+        return "destructive"
+      case "spelling":
+        return "outline"
+      case "style":
+        return "outline"
+      case "clarity":
+        return "outline"
+      case "tone":
+        return "outline"
+      default:
+        return "outline"
+    }
+  }
+
+  const getBadgeColor = (type: SuggestionType) => {
+    switch (type) {
+      case "grammar":
+        return ""
+      case "spelling":
+        return "border-amber-500 text-amber-700"
+      case "style":
+        return "border-blue-500 text-blue-700"
+      case "clarity":
+        return "border-purple-500 text-purple-700"
+      case "tone":
+        return "border-green-500 text-green-700"
+      default:
+        return ""
     }
   }
 
@@ -232,6 +350,16 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         <Alert className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="text-red-800">{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* AI Status Alert */}
+      {!aiAvailable && (
+        <Alert className="border-blue-200 bg-blue-50">
+          <Info className="h-4 w-4" />
+          <AlertDescription className="text-blue-800">
+            AI-powered checking is not available. Add your OpenAI API key to enable advanced grammar analysis.
+          </AlertDescription>
         </Alert>
       )}
 
@@ -287,28 +415,65 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
               <TabsList>
                 <TabsTrigger value="editor">Editor</TabsTrigger>
                 <TabsTrigger value="performance">Performance</TabsTrigger>
+                <TabsTrigger value="settings">
+                  <Settings className="w-4 h-4 mr-1" />
+                  Settings
+                </TabsTrigger>
               </TabsList>
 
               <div className="flex gap-2">
+                {isCheckingGrammar && (
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    {settings.enableAI && aiAvailable ? "AI Checking..." : "Checking..."}
+                  </Badge>
+                )}
                 {getSuggestionCount("grammar") > 0 && (
-                  <Badge variant="destructive" className="flex items-center gap-1">
+                  <Badge
+                    variant={getBadgeVariant("grammar")}
+                    className={`flex items-center gap-1 ${getBadgeColor("grammar")}`}
+                  >
                     <AlertCircle className="w-3 h-3" />
                     {getSuggestionCount("grammar")}
                   </Badge>
                 )}
                 {getSuggestionCount("spelling") > 0 && (
-                  <Badge variant="outline" className="flex items-center gap-1 border-amber-500 text-amber-700">
+                  <Badge
+                    variant={getBadgeVariant("spelling")}
+                    className={`flex items-center gap-1 ${getBadgeColor("spelling")}`}
+                  >
                     <AlertTriangle className="w-3 h-3" />
                     {getSuggestionCount("spelling")}
                   </Badge>
                 )}
                 {getSuggestionCount("style") > 0 && (
-                  <Badge variant="outline" className="flex items-center gap-1 border-blue-500 text-blue-700">
+                  <Badge
+                    variant={getBadgeVariant("style")}
+                    className={`flex items-center gap-1 ${getBadgeColor("style")}`}
+                  >
                     <Info className="w-3 h-3" />
                     {getSuggestionCount("style")}
                   </Badge>
                 )}
-                {suggestions.length === 0 && text.length > 20 && (
+                {getSuggestionCount("clarity") > 0 && (
+                  <Badge
+                    variant={getBadgeVariant("clarity")}
+                    className={`flex items-center gap-1 ${getBadgeColor("clarity")}`}
+                  >
+                    <Lightbulb className="w-3 h-3" />
+                    {getSuggestionCount("clarity")}
+                  </Badge>
+                )}
+                {getSuggestionCount("tone") > 0 && (
+                  <Badge
+                    variant={getBadgeVariant("tone")}
+                    className={`flex items-center gap-1 ${getBadgeColor("tone")}`}
+                  >
+                    <Zap className="w-3 h-3" />
+                    {getSuggestionCount("tone")}
+                  </Badge>
+                )}
+                {suggestions.length === 0 && text.length > 20 && !isCheckingGrammar && (
                   <Badge variant="outline" className="flex items-center gap-1 border-green-500 text-green-700">
                     <CheckCircle2 className="w-3 h-3" />
                     All good
@@ -321,7 +486,11 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
               <Card>
                 <CardContent className="p-4">
                   <Textarea
-                    placeholder="Start typing here... We'll check your grammar, spelling, and style."
+                    placeholder={
+                      aiAvailable
+                        ? "Start typing here... We'll check your grammar, spelling, and style with AI assistance."
+                        : "Start typing here... We'll check your grammar, spelling, and style using pattern matching."
+                    }
                     className="min-h-[400px] border-none focus-visible:ring-0 resize-none text-base"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
@@ -338,12 +507,110 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="settings" className="mt-0">
+              <Card>
+                <CardContent className="p-4 space-y-4">
+                  <h3 className="text-lg font-medium">Grammar Check Settings</h3>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="ai-mode">AI-Powered Checking</Label>
+                      <p className="text-sm text-slate-500">
+                        {aiAvailable
+                          ? "Use ChatGPT for advanced grammar analysis"
+                          : "OpenAI API key required for AI features"}
+                      </p>
+                    </div>
+                    <Switch
+                      id="ai-mode"
+                      checked={settings.enableAI && aiAvailable}
+                      onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enableAI: checked }))}
+                      disabled={!aiAvailable}
+                    />
+                  </div>
+
+                  {!aiAvailable && (
+                    <Alert className="border-amber-200 bg-amber-50">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription className="text-amber-800">
+                        To enable AI-powered checking, add your OpenAI API key as an environment variable:
+                        <code className="block mt-1 p-1 bg-amber-100 rounded text-xs">
+                          OPENAI_API_KEY=your-api-key-here
+                        </code>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-3">
+                    <h4 className="font-medium">Check for:</h4>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="check-grammar">Grammar errors</Label>
+                      <Switch
+                        id="check-grammar"
+                        checked={settings.checkGrammar}
+                        onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, checkGrammar: checked }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="check-spelling">Spelling mistakes</Label>
+                      <Switch
+                        id="check-spelling"
+                        checked={settings.checkSpelling}
+                        onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, checkSpelling: checked }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="check-style">Style improvements</Label>
+                      <Switch
+                        id="check-style"
+                        checked={settings.checkStyle}
+                        onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, checkStyle: checked }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="check-clarity">
+                        Clarity issues {!aiAvailable && <span className="text-xs text-slate-400">(AI only)</span>}
+                      </Label>
+                      <Switch
+                        id="check-clarity"
+                        checked={settings.checkClarity}
+                        onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, checkClarity: checked }))}
+                        disabled={!aiAvailable}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="check-tone">
+                        Tone consistency {!aiAvailable && <span className="text-xs text-slate-400">(AI only)</span>}
+                      </Label>
+                      <Switch
+                        id="check-tone"
+                        checked={settings.checkTone}
+                        onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, checkTone: checked }))}
+                        disabled={!aiAvailable}
+                      />
+                    </div>
+                  </div>
+
+                  <Button onClick={() => performGrammarCheck(text)} disabled={isCheckingGrammar} className="w-full">
+                    {isCheckingGrammar ? "Checking..." : "Re-check Document"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
 
         {/* Suggestions */}
         <div className="space-y-4">
-          <h2 className="text-lg font-medium">Suggestions</h2>
+          <h2 className="text-lg font-medium">
+            Suggestions {!aiAvailable && <span className="text-sm text-slate-400">(Basic Mode)</span>}
+          </h2>
           {suggestions.length > 0 ? (
             <div className="space-y-3">
               {suggestions.map((suggestion, index) => (
@@ -358,17 +625,29 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
           ) : (
             <Card>
               <CardContent className="p-4 text-center">
-                {text.length > 20 ? (
+                {isCheckingGrammar ? (
+                  <div className="py-8">
+                    <div className="w-12 h-12 mx-auto border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
+                    <p className="text-slate-600">Analyzing your text...</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {settings.enableAI && aiAvailable ? "AI is checking for improvements" : "Checking for issues"}
+                    </p>
+                  </div>
+                ) : text.length > 20 ? (
                   <div className="py-8">
                     <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
-                    <p className="text-slate-600">Your text looks good!</p>
+                    <p className="text-slate-600">Your text looks great!</p>
                     <p className="text-sm text-slate-500 mt-1">No issues detected.</p>
                   </div>
                 ) : (
                   <div className="py-8">
                     <Info className="w-12 h-12 mx-auto text-slate-400 mb-2" />
                     <p className="text-slate-600">Start typing to see suggestions</p>
-                    <p className="text-sm text-slate-500 mt-1">We'll analyze your text as you write.</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {aiAvailable
+                        ? "AI will analyze your text as you write."
+                        : "Pattern matching will check your text."}
+                    </p>
                   </div>
                 )}
               </CardContent>

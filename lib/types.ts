@@ -1,4 +1,4 @@
-export type SuggestionType = "grammar" | "spelling" | "style"
+export type SuggestionType = "grammar" | "spelling" | "style" | "clarity" | "tone"
 
 export interface Suggestion {
   type: SuggestionType
@@ -6,6 +6,7 @@ export interface Suggestion {
   originalText: string
   suggestedText: string
   explanation: string
+  severity?: "low" | "medium" | "high"
 }
 
 export interface Document {
@@ -20,4 +21,13 @@ export interface Document {
 export interface User {
   id: string
   email: string
+}
+
+export interface GrammarCheckSettings {
+  enableAI: boolean
+  checkGrammar: boolean
+  checkSpelling: boolean
+  checkStyle: boolean
+  checkClarity: boolean
+  checkTone: boolean
 }
