@@ -25,7 +25,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { checkGrammar } from "@/lib/grammar-checker"
-import { checkGrammarWithAI, isOpenAIAvailable } from "@/lib/openai-grammar-checker"
+import { checkAIAvailability, performGrammarCheck } from "@/lib/client-grammar-checker"
 import type { Suggestion, SuggestionType, Document, User as SupabaseUser, GrammarCheckSettings } from "@/lib/types"
 import { SuggestionCard } from "@/components/suggestion-card"
 import { TextStats } from "@/components/text-stats"
@@ -58,8 +58,8 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
 
   // Check AI availability on mount
   useEffect(() => {
-    const checkAI = () => {
-      const available = isOpenAIAvailable()
+    const checkAI = async () => {
+      const available = await checkAIAvailability()
       console.log("AI availability check result:", available)
       setAiAvailable(available)
       // Only enable AI if it's actually available
@@ -85,7 +85,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     }
   }, [])
 
-  const performGrammarCheck = useCallback(
+  const performGrammarCheckLocal = useCallback(
     async (textToCheck: string) => {
       if (!textToCheck.trim() || textToCheck.length < 10) {
         setSuggestions([])
@@ -95,36 +95,9 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
       setIsCheckingGrammar(true)
 
       try {
-        let results: Suggestion[] = []
-
-        // Only use AI if both settings allow it AND AI is actually available
-        if (settings.enableAI && aiAvailable) {
-          console.log("Using AI grammar checking")
-          results = await checkGrammarWithAI(textToCheck)
-        } else {
-          console.log("Using basic grammar checking")
-          results = checkGrammar(textToCheck)
-        }
-
-        // Filter suggestions based on settings
-        const filteredResults = results.filter((suggestion) => {
-          switch (suggestion.type) {
-            case "grammar":
-              return settings.checkGrammar
-            case "spelling":
-              return settings.checkSpelling
-            case "style":
-              return settings.checkStyle
-            case "clarity":
-              return settings.checkClarity
-            case "tone":
-              return settings.checkTone
-            default:
-              return true
-          }
-        })
-
-        setSuggestions(filteredResults)
+        // Use the API-based grammar check
+        const result = await performGrammarCheck(textToCheck, settings)
+        setSuggestions(result.suggestions)
       } catch (error) {
         console.error("Grammar check failed:", error)
         // Fallback to basic checking
@@ -134,17 +107,17 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         setIsCheckingGrammar(false)
       }
     },
-    [settings, aiAvailable],
+    [settings],
   )
 
   useEffect(() => {
     // Debounce the grammar check to avoid checking on every keystroke
     const timer = setTimeout(() => {
-      performGrammarCheck(text)
-    }, 1000) // Increased delay for AI calls
+      performGrammarCheckLocal(text)
+    }, 1000) // Increased delay for API calls
 
     return () => clearTimeout(timer)
-  }, [text, performGrammarCheck])
+  }, [text, performGrammarCheckLocal])
 
   // Auto-save functionality
   useEffect(() => {
@@ -293,6 +266,13 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     )
   }
 
+  const ignoreSuggestion = (suggestion: Suggestion) => {
+    // Remove the ignored suggestion from the suggestions list
+    setSuggestions(
+      suggestions.filter((s) => !(s.position === suggestion.position && s.originalText === suggestion.originalText)),
+    )
+  }
+
   const getSuggestionCount = (type: SuggestionType) => {
     return suggestions.filter((s) => s.type === type).length
   }
@@ -363,8 +343,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
         <Alert className="border-blue-200 bg-blue-50">
           <Info className="h-4 w-4" />
           <AlertDescription className="text-blue-800">
-            <strong>Basic Mode:</strong> Using pattern-based grammar checking. Add your OpenAI API key to enable
-            AI-powered analysis.
+            <strong>Basic Mode:</strong> Using pattern-based grammar checking. AI-powered analysis is not available.
           </AlertDescription>
         </Alert>
       )}
@@ -523,9 +502,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                     <div className="space-y-0.5">
                       <Label htmlFor="ai-mode">AI-Powered Checking</Label>
                       <p className="text-sm text-slate-500">
-                        {aiAvailable
-                          ? "Use ChatGPT for advanced grammar analysis"
-                          : "OpenAI API key required for AI features"}
+                        {aiAvailable ? "Use ChatGPT for advanced grammar analysis" : "AI features are not available"}
                       </p>
                     </div>
                     <Switch
@@ -540,11 +517,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                     <Alert className="border-amber-200 bg-amber-50">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertDescription className="text-amber-800">
-                        To enable AI-powered checking, add your OpenAI API key as an environment variable:
-                        <code className="block mt-1 p-1 bg-amber-100 rounded text-xs">
-                          OPENAI_API_KEY=your-api-key-here
-                        </code>
-                        <p className="text-xs mt-1">Currently using basic pattern-based grammar checking.</p>
+                        AI-powered checking is not available. Using basic pattern-based grammar checking.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -604,7 +577,11 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                     </div>
                   </div>
 
-                  <Button onClick={() => performGrammarCheck(text)} disabled={isCheckingGrammar} className="w-full">
+                  <Button
+                    onClick={() => performGrammarCheckLocal(text)}
+                    disabled={isCheckingGrammar}
+                    className="w-full"
+                  >
                     {isCheckingGrammar ? "Checking..." : "Re-check Document"}
                   </Button>
                 </CardContent>
@@ -625,6 +602,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                   key={index}
                   suggestion={suggestion}
                   onApply={() => applySuggestion(suggestion)}
+                  onIgnore={() => ignoreSuggestion(suggestion)}
                   icon={getIconForType(suggestion.type)}
                 />
               ))}

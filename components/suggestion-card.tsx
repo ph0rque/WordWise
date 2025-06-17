@@ -4,14 +4,18 @@ import type { ReactNode } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import type { Suggestion } from "@/lib/types"
+import { useState } from "react"
 
 interface SuggestionCardProps {
   suggestion: Suggestion
   onApply: () => void
+  onIgnore?: () => void
   icon?: ReactNode
 }
 
-export function SuggestionCard({ suggestion, onApply, icon }: SuggestionCardProps) {
+export function SuggestionCard({ suggestion, onApply, onIgnore, icon }: SuggestionCardProps) {
+  const [isIgnored, setIsIgnored] = useState(false)
+
   const getTypeLabel = (type: string) => {
     switch (type) {
       case "grammar":
@@ -23,6 +27,18 @@ export function SuggestionCard({ suggestion, onApply, icon }: SuggestionCardProp
       default:
         return "Suggestion"
     }
+  }
+
+  const handleIgnore = () => {
+    setIsIgnored(true)
+    // Optional: call onIgnore callback if provided
+    if (onIgnore) {
+      onIgnore()
+    }
+  }
+
+  if (isIgnored) {
+    return null
   }
 
   return (
@@ -40,7 +56,7 @@ export function SuggestionCard({ suggestion, onApply, icon }: SuggestionCardProp
           </p>
           <p className="text-xs text-slate-500 mb-3">{suggestion.explanation}</p>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleIgnore}>
               Ignore
             </Button>
             <Button size="sm" onClick={onApply}>

@@ -59,6 +59,13 @@ export function DemoEditor() {
     )
   }
 
+  const ignoreSuggestion = (suggestion: Suggestion) => {
+    // Remove the ignored suggestion from the suggestions list
+    setSuggestions(
+      suggestions.filter((s) => !(s.position === suggestion.position && s.originalText === suggestion.originalText)),
+    )
+  }
+
   const getSuggestionCount = (type: SuggestionType) => {
     return suggestions.filter((s) => s.type === type).length
   }
@@ -165,6 +172,7 @@ export function DemoEditor() {
                       key={index}
                       suggestion={suggestion}
                       onApply={() => applySuggestion(suggestion)}
+                      onIgnore={() => ignoreSuggestion(suggestion)}
                       icon={getIconForType(suggestion.type)}
                     />
                   ))}

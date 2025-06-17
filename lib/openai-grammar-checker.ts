@@ -1,10 +1,10 @@
 import type { Suggestion } from "./types"
 
-// Check if OpenAI API key is available
-function isOpenAIAvailable(): boolean {
-  const hasKey = !!(process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY)
-  console.log("OpenAI API key check:", hasKey ? "Available" : "Not available")
-  console.log("Environment check - OPENAI_API_KEY exists:", !!process.env.OPENAI_API_KEY)
+// Check if OpenAI is available on the server (this will be called from API routes)
+export function isOpenAIAvailable(): boolean {
+  // Only check server-side environment variable
+  const hasKey = !!process.env.OPENAI_API_KEY
+  console.log("OpenAI API key check (server-side):", hasKey ? "Available" : "Not available")
   return hasKey
 }
 
@@ -26,8 +26,8 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
     const { generateObject } = await import("ai")
     const { z } = await import("zod")
 
-    // Get API key from environment - prioritize the main OPENAI_API_KEY
-    const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY
+    // Get API key from server environment only
+    const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
       throw new Error("API key not found after availability check")
     }
@@ -102,87 +102,3 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
     return checkGrammar(text)
   }
 }
-
-export async function checkGrammarStreaming(
-  text: string,
-  onSuggestion: (suggestion: Suggestion) => void,
-): Promise<void> {
-  if (!text.trim() || text.length < 10) {
-    return
-  }
-
-  // Check if OpenAI is available first
-  if (!isOpenAIAvailable()) {
-    console.log("OpenAI API key not found, using basic grammar checker")
-    const { checkGrammar } = await import("./grammar-checker")
-    const suggestions = checkGrammar(text)
-    suggestions.forEach(onSuggestion)
-    return
-  }
-
-  try {
-    // Dynamic import and create client only when we know the key exists
-    const { createOpenAI } = await import("@ai-sdk/openai")
-    const { generateObject } = await import("ai")
-    const { z } = await import("zod")
-
-    // Get API key from environment - prioritize the main OPENAI_API_KEY
-    const apiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY
-    if (!apiKey) {
-      throw new Error("API key not found after availability check")
-    }
-
-    console.log("Using OpenAI API key:", apiKey ? `${apiKey.substring(0, 10)}...` : "Not found")
-
-    // Create OpenAI client with explicit API key
-    const openai = createOpenAI({
-      apiKey: apiKey,
-    })
-
-    const SuggestionSchema = z.object({
-      suggestions: z.array(
-        z.object({
-          type: z.enum(["grammar", "spelling", "style", "clarity", "tone"]),
-          position: z.number(),
-          originalText: z.string(),
-          suggestedText: z.string(),
-          explanation: z.string(),
-          severity: z.enum(["low", "medium", "high"]),
-        }),
-      ),
-    })
-
-    const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
-      schema: SuggestionSchema,
-      prompt: `
-        Analyze this text for writing issues and provide suggestions:
-        
-        "${text}"
-        
-        Focus on the most important issues first. Provide practical, actionable suggestions.
-      `,
-    })
-
-    // Process suggestions one by one
-    object.suggestions.forEach((suggestion) => {
-      onSuggestion({
-        type: suggestion.type as any,
-        position: suggestion.position,
-        originalText: suggestion.originalText,
-        suggestedText: suggestion.suggestedText,
-        explanation: suggestion.explanation,
-        severity: suggestion.severity,
-      })
-    })
-  } catch (error) {
-    console.error("Error with streaming grammar check:", error)
-    // Fallback to basic grammar checker
-    const { checkGrammar } = await import("./grammar-checker")
-    const suggestions = checkGrammar(text)
-    suggestions.forEach(onSuggestion)
-  }
-}
-
-// Export function to check if AI is available
-export { isOpenAIAvailable }
