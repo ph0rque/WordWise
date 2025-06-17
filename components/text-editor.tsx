@@ -67,6 +67,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
   const [lastCheckedText, setLastCheckedText] = useState<string>("")
   const [manualCheckRequested, setManualCheckRequested] = useState(false)
   const grammarCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [isClient, setIsClient] = useState(false)
 
   const [settings, setSettings] = useState<GrammarCheckSettings>({
     enableAI: false,
@@ -471,6 +472,10 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
     }
   }
 
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
   return (
     <div className="space-y-6">
       {/* Error Alert */}
@@ -630,7 +635,7 @@ export function TextEditor({ user, onSignOut }: TextEditorProps) {
                 </Button>
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   {saving && <span>Saving...</span>}
-                  {lastSaved && !saving && <span className="italic">Saved {lastSaved.toLocaleTimeString()}</span>}
+                  {isClient && lastSaved && !saving && <span className="italic">Saved {lastSaved.toLocaleTimeString()}</span>}
                 </div>
               </div>
             </TabsContent>
