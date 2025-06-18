@@ -16,6 +16,7 @@ import {
   BarChart3,
   BookOpen,
   TrendingUp,
+  Bot,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -54,6 +55,7 @@ import { SuggestionCard } from "@/components/suggestion-card"
 import { TextStats } from "@/components/text-stats"
 import ReadabilityDashboard from "@/components/analysis/readability-dashboard"
 import VocabularyEnhancer from "@/components/analysis/vocabulary-enhancer"
+import { ChatPanel } from "@/components/tutor/chat-panel"
 
 interface TextEditorProps {
   user: SupabaseUser
@@ -622,6 +624,10 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
                   <BookOpen className="w-4 h-4 mr-1" />
                   Vocabulary
                 </TabsTrigger>
+                <TabsTrigger value="tutor">
+                  <Bot className="w-4 h-4 mr-1" />
+                  AI Tutor
+                </TabsTrigger>
                 <TabsTrigger value="settings">
                   <Settings className="w-4 h-4 mr-1" />
                   Settings
@@ -770,6 +776,23 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
                   console.log('Refreshing vocabulary analysis');
                 }}
               />
+            </TabsContent>
+
+            <TabsContent value="tutor" className="mt-0">
+              <div className="h-[600px]">
+                <ChatPanel
+                  documentId={currentDocument?.id || `temp-doc-${user.id}`}
+                  documentContent={text}
+                  documentTitle={documentTitle}
+                  aiAvailable={aiAvailable}
+                  isStudent={user.role === 'student'}
+                  onExportChat={(session) => {
+                    // Handle chat export for teacher review
+                    console.log('Exporting chat session:', session);
+                    // Could implement download functionality here
+                  }}
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="settings" className="mt-0">
