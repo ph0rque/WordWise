@@ -84,3 +84,43 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canExportData: true,
   },
 }
+
+export interface GrammarRule {
+  id: string
+  name: string
+  category: 'punctuation' | 'grammar' | 'style' | 'spelling' | 'academic-style' | 'vocabulary'
+  description: string
+  explanation: string
+  examples: {
+    incorrect: string
+    correct: string
+    explanation?: string
+  }[]
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  commonMistakes: string[]
+  tips: string[]
+  relatedRules?: string[]
+}
+
+export interface EducationalFeedback {
+  ruleId: string
+  ruleName: string
+  category: GrammarRule['category']
+  explanation: string
+  examples: GrammarRule['examples']
+  tips: string[]
+  difficulty: GrammarRule['difficulty']
+  learningObjective: string
+  practiceExercise?: {
+    instruction: string
+    examples: string[]
+  }
+}
+
+export interface EnhancedSuggestion extends Suggestion {
+  educationalFeedback?: EducationalFeedback
+  grammarRule?: string
+  learningValue: 'high' | 'medium' | 'low'
+  mistakePattern?: string
+  improvementTip?: string
+}
