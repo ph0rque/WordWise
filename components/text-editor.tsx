@@ -28,6 +28,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { checkGrammar } from "@/lib/grammar-checker"
 import { checkAIAvailability, performGrammarCheck } from "@/lib/client-grammar-checker"
+import { 
+  enhancedGrammarCheck, 
+  isAcademicGrammarAvailable,
+  type AcademicGrammarCheckOptions 
+} from "@/lib/client-academic-grammar-checker"
 import {
   generateSuggestionId,
   shouldFilterSuggestion,
@@ -80,12 +85,31 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
     checkTone: false,
   })
 
+  // Academic grammar checking settings
+  const [academicSettings, setAcademicSettings] = useState<AcademicGrammarCheckOptions & {
+    enableAcademicMode: boolean
+  }>({
+    enableAcademicMode: true,
+    academicLevel: 'high-school',
+    subject: undefined,
+  })
+
+  const [academicAvailable, setAcademicAvailable] = useState(false)
+  const [academicAssessment, setAcademicAssessment] = useState<{
+    score: number
+    level: 'below-standard' | 'developing' | 'proficient' | 'advanced'
+    feedback: string[]
+  } | null>(null)
+
   // Check AI availability on mount
   useEffect(() => {
     const checkAI = async () => {
       const available = await checkAIAvailability()
+      const academicAvail = await isAcademicGrammarAvailable()
       console.log("AI availability check result:", available)
+      console.log("Academic grammar availability check result:", academicAvail)
       setAiAvailable(available)
+      setAcademicAvailable(academicAvail)
       if (available) {
         setSettings((prev) => ({ ...prev, enableAI: true }))
       }
@@ -146,8 +170,23 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
       setManualCheckRequested(false)
 
       try {
-        console.log("Performing grammar check...")
-        const result = await performGrammarCheck(textToCheck, settings)
+        console.log("Performing enhanced grammar check...")
+        
+        // Use enhanced academic grammar check if available and enabled
+        const useAcademicMode = academicAvailable && academicSettings.enableAcademicMode
+        
+        let result
+        if (useAcademicMode) {
+          result = await enhancedGrammarCheck(textToCheck, academicSettings)
+          // Update academic assessment if available
+          if (result.academicAssessment) {
+            setAcademicAssessment(result.academicAssessment)
+          }
+        } else {
+          // Fallback to regular grammar check
+          const basicResult = await performGrammarCheck(textToCheck, settings)
+          result = { suggestions: basicResult.suggestions }
+        }
 
         // Add unique IDs to suggestions and filter based on recent actions
         const suggestionsWithIds = result.suggestions.map((suggestion) => ({
@@ -162,6 +201,7 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
 
         console.log(
           `Grammar check complete: ${result.suggestions.length} total, ${filteredSuggestions.length} after filtering`,
+          useAcademicMode ? "(Academic mode)" : "(Basic mode)"
         )
 
         setSuggestions(filteredSuggestions)
@@ -458,6 +498,10 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
         return "outline"
       case "tone":
         return "outline"
+      case "academic-style":
+        return "default"
+      case "vocabulary":
+        return "secondary"
       default:
         return "outline"
     }
@@ -475,6 +519,10 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
         return "border-purple-500 text-purple-700"
       case "tone":
         return "border-green-500 text-green-700"
+      case "academic-style":
+        return "border-indigo-500 text-indigo-700"
+      case "vocabulary":
+        return "border-teal-500 text-teal-700"
       default:
         return ""
     }
@@ -620,6 +668,24 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
                     {getSuggestionCount("tone")}
                   </Badge>
                 )}
+                {getSuggestionCount("academic-style") > 0 && (
+                  <Badge
+                    variant={getBadgeVariant("academic-style")}
+                    className={`flex items-center gap-1 ${getBadgeColor("academic-style")}`}
+                  >
+                    <User className="w-3 h-3" />
+                    {getSuggestionCount("academic-style")}
+                  </Badge>
+                )}
+                {getSuggestionCount("vocabulary") > 0 && (
+                  <Badge
+                    variant={getBadgeVariant("vocabulary")}
+                    className={`flex items-center gap-1 ${getBadgeColor("vocabulary")}`}
+                  >
+                    <FileText className="w-3 h-3" />
+                    {getSuggestionCount("vocabulary")}
+                  </Badge>
+                )}
                 {suggestions.length === 0 && text.length > 20 && !isCheckingGrammar && (
                   <Badge variant="outline" className="flex items-center gap-1 border-green-500 text-green-700">
                     <CheckCircle2 className="w-3 h-3" />
@@ -750,6 +816,102 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
                       />
                     </div>
                   </div>
+
+                  {/* Academic Writing Section */}
+                  {academicAvailable && (
+                    <>
+                      <div className="border-t pt-4">
+                        <h3 className="text-lg font-medium mb-4">Academic Writing Assistant</h3>
+
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="academic-mode">Academic Mode</Label>
+                            <p className="text-sm text-slate-500">
+                              Enhanced checking for academic writing with style and vocabulary suggestions
+                            </p>
+                          </div>
+                          <Switch
+                            id="academic-mode"
+                            checked={academicSettings.enableAcademicMode}
+                            onCheckedChange={(checked) => 
+                              setAcademicSettings((prev) => ({ ...prev, enableAcademicMode: checked }))
+                            }
+                          />
+                        </div>
+
+                        {academicSettings.enableAcademicMode && (
+                          <div className="space-y-3 ml-4 pl-4 border-l-2 border-slate-200">
+                            <div className="space-y-2">
+                              <Label htmlFor="academic-level">Academic Level</Label>
+                              <select
+                                id="academic-level"
+                                className="w-full p-2 border border-slate-200 rounded-md text-sm"
+                                value={academicSettings.academicLevel}
+                                onChange={(e) => 
+                                  setAcademicSettings((prev) => ({ 
+                                    ...prev, 
+                                    academicLevel: e.target.value as 'high-school' | 'college' 
+                                  }))
+                                }
+                              >
+                                <option value="high-school">High School</option>
+                                <option value="college">College</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="subject">Subject (Optional)</Label>
+                              <Input
+                                id="subject"
+                                placeholder="e.g., Biology, History, Literature"
+                                value={academicSettings.subject || ''}
+                                onChange={(e) => 
+                                  setAcademicSettings((prev) => ({ 
+                                    ...prev, 
+                                    subject: e.target.value || undefined 
+                                  }))
+                                }
+                                className="text-sm"
+                              />
+                            </div>
+
+                            {/* Academic Assessment Display */}
+                            {academicAssessment && (
+                              <div className="mt-4 p-3 bg-slate-50 rounded-md">
+                                <h4 className="font-medium text-sm mb-2">Writing Assessment</h4>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-sm">Level:</span>
+                                  <Badge 
+                                    variant={
+                                      academicAssessment.level === 'advanced' ? 'default' :
+                                      academicAssessment.level === 'proficient' ? 'secondary' :
+                                      academicAssessment.level === 'developing' ? 'outline' : 'destructive'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {academicAssessment.level.charAt(0).toUpperCase() + academicAssessment.level.slice(1)}
+                                  </Badge>
+                                  <span className="text-sm text-slate-600">
+                                    ({academicAssessment.score}/100)
+                                  </span>
+                                </div>
+                                {academicAssessment.feedback.length > 0 && (
+                                  <div className="text-xs text-slate-600">
+                                    <p className="font-medium mb-1">Suggestions:</p>
+                                    <ul className="list-disc list-inside space-y-1">
+                                      {academicAssessment.feedback.map((feedback, index) => (
+                                        <li key={index}>{feedback}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   <Button onClick={manualGrammarCheck} disabled={isCheckingGrammar} className="w-full">
                     {isCheckingGrammar ? "Checking..." : "Re-check Document"}

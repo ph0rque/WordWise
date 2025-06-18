@@ -19,10 +19,19 @@
 - **Theme Support**: Dark/light mode with next-themes
 
 ### Authentication & Data
-- **User Authentication**: Complete Supabase Auth integration
+- **User Authentication**: Complete Supabase Auth integration with role-based access
+- **Role System**: Student and admin roles with permission-based UI rendering
 - **Document Storage**: Secure document persistence with user isolation
 - **Session Management**: Automatic session handling and cleanup
 - **Data Protection**: Row-level security and proper access control
+
+### Academic Writing Features
+- **Enhanced AI Grammar Checker**: Academic-focused grammar checking with OpenAI integration
+- **Academic Style Detection**: Identifies informal language, contractions, first-person usage
+- **Confidence Scoring**: AI suggestions include 0-100% confidence ratings
+- **Academic Vocabulary**: Suggestions for more precise academic terminology
+- **Writing Level Assessment**: Automatic scoring and feedback on academic writing quality
+- **Subject-Specific Context**: Grammar checking tailored to specific academic subjects
 
 ### Technical Infrastructure
 - **API Routes**: Grammar checking and AI status endpoints
@@ -32,6 +41,11 @@
 - **Security**: Environment variable management and input validation
 
 ## 🚧 In Progress
+
+### Academic Writing Features (Phase 2)
+- **Academic Analysis & Feedback**: Readability analysis and writing metrics
+- **AI Essay Tutor**: Chat integration for educational guidance
+- **Keystroke Recording**: Writing process analytics for educators
 
 ### Code Quality Improvements
 - **Component Refactoring**: TextEditor is large and could be split

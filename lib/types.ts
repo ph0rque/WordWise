@@ -1,4 +1,4 @@
-export type SuggestionType = "grammar" | "spelling" | "style" | "clarity" | "tone"
+export type SuggestionType = "grammar" | "spelling" | "style" | "clarity" | "tone" | "academic-style" | "vocabulary"
 
 export interface Suggestion {
   type: SuggestionType
@@ -8,6 +8,9 @@ export interface Suggestion {
   explanation: string
   severity?: "low" | "medium" | "high"
   id?: string // Add unique ID for tracking
+  confidence?: number // Confidence score 0-100 for AI suggestions
+  academicContext?: string // Academic writing context for educational feedback
+  grammarRule?: string // Specific grammar rule violated
 }
 
 export interface Document {
