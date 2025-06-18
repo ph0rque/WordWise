@@ -41,7 +41,13 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
   try {
     const supabase = getSupabaseClient()
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Add timeout to prevent hanging
+    const userPromise = supabase.auth.getUser()
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('User fetch timeout')), 5000)
+    })
+    
+    const { data: { user }, error: authError } = await Promise.race([userPromise, timeoutPromise]) as any
     if (authError || !user) {
       console.error('Error getting authenticated user:', authError)
       return null

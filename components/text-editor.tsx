@@ -14,6 +14,8 @@ import {
   Settings,
   FileText,
   BarChart3,
+  BookOpen,
+  TrendingUp,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -50,6 +52,8 @@ import type {
 } from "@/lib/types"
 import { SuggestionCard } from "@/components/suggestion-card"
 import { TextStats } from "@/components/text-stats"
+import ReadabilityDashboard from "@/components/analysis/readability-dashboard"
+import VocabularyEnhancer from "@/components/analysis/vocabulary-enhancer"
 
 interface TextEditorProps {
   user: SupabaseUser
@@ -610,6 +614,14 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
                   <BarChart3 className="w-4 h-4 mr-1" />
                   Performance
                 </TabsTrigger>
+                <TabsTrigger value="readability">
+                  <TrendingUp className="w-4 h-4 mr-1" />
+                  Readability
+                </TabsTrigger>
+                <TabsTrigger value="vocabulary">
+                  <BookOpen className="w-4 h-4 mr-1" />
+                  Vocabulary
+                </TabsTrigger>
                 <TabsTrigger value="settings">
                   <Settings className="w-4 h-4 mr-1" />
                   Settings
@@ -731,6 +743,33 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
                   <TextStats text={text} />
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="readability" className="mt-0">
+              <ReadabilityDashboard 
+                onAnalyze={(textToAnalyze) => {
+                  // Trigger readability analysis
+                  console.log('Analyzing readability for:', textToAnalyze);
+                }}
+                onRefresh={() => {
+                  // Refresh readability analysis
+                  console.log('Refreshing readability analysis');
+                }}
+              />
+            </TabsContent>
+
+            <TabsContent value="vocabulary" className="mt-0">
+              <VocabularyEnhancer 
+                text={text}
+                onApplySuggestion={(suggestion, selectedWord) => {
+                  // Apply vocabulary suggestion
+                  console.log('Applying vocabulary suggestion:', suggestion, 'selected word:', selectedWord);
+                }}
+                onRefresh={() => {
+                  // Refresh vocabulary analysis
+                  console.log('Refreshing vocabulary analysis');
+                }}
+              />
             </TabsContent>
 
             <TabsContent value="settings" className="mt-0">

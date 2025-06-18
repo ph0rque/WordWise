@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { TextEditor, SuggestionsPanel, useSuggestionsPanelProps } from "@/components/text-editor"
 import { EnhancedAuthForm } from "@/components/auth/enhanced-auth-form"
@@ -12,13 +12,18 @@ import { RoleBasedHeader, RoleBasedNotifications } from "@/components/navigation
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { GraduationCap, AlertCircle } from "lucide-react"
+import { GraduationCap, AlertCircle, RefreshCw } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
+import { loadingTracker } from "@/lib/utils"
+
+// Loading timeout configuration
+const LOADING_TIMEOUT = 10000 // 10 seconds
+const ROLE_CHECK_TIMEOUT = 5000 // 5 seconds
 
 export default function Home() {
   const router = useRouter()
@@ -27,6 +32,7 @@ export default function Home() {
   
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingError, setLoadingError] = useState<string | null>(null)
   const [supabaseAvailable, setSupabaseAvailable] = useState(false)
   const [refreshDocumentsFlag, setRefreshDocumentsFlag] = useState(0)
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null)
@@ -39,6 +45,11 @@ export default function Home() {
   const [getIconForType, setGetIconForType] = useState<any>(null)
   const [suggestionsPanelProps, setSuggestionsPanelProps] = useState<any>({})
   const [mounted, setMounted] = useState(false)
+  const [initializationComplete, setInitializationComplete] = useState(false)
+
+  // Timeout refs for cleanup
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const roleCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Role-based features - only use after component mounts to avoid hydration issues
   const roleFeatures = useRoleBasedFeatures()
@@ -49,7 +60,7 @@ export default function Home() {
     showUpgradePrompts,
     currentRole,
     isAuthenticated: roleBasedAuth,
-  } = mounted ? roleFeatures : {
+  } = mounted && initializationComplete ? roleFeatures : {
     canCreateDocuments: false,
     canUseGrammarChecker: false,
     showAdminNavigation: false,
@@ -69,6 +80,11 @@ export default function Home() {
     refreshDocuments()
   }
 
+  // Force reload function for stuck states
+  const handleForceReload = () => {
+    window.location.reload()
+  }
+
   // Set mounted state to avoid hydration issues
   useEffect(() => {
     setMounted(true)
@@ -76,31 +92,51 @@ export default function Home() {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      // Check if Supabase is configured
-      if (!isSupabaseConfigured()) {
-        console.log("Supabase not configured, showing demo mode")
-        setSupabaseAvailable(false)
-        setLoading(false)
-        return
-      }
-
       try {
+        // Start tracking initialization
+        loadingTracker.startLoading('auth-init', 'Initializing authentication')
+        
+        // Set up loading timeout
+        loadingTimeoutRef.current = setTimeout(() => {
+          console.warn('Loading timeout reached, forcing completion')
+          loadingTracker.failLoading('auth-init', 'Timeout reached')
+          setLoadingError('Loading is taking longer than expected. Please try refreshing the page.')
+          setLoading(false)
+        }, LOADING_TIMEOUT)
+
+        // Check if Supabase is configured
+        if (!isSupabaseConfigured()) {
+          console.log("Supabase not configured, showing demo mode")
+          loadingTracker.endLoading('auth-init')
+          setSupabaseAvailable(false)
+          setLoading(false)
+          setInitializationComplete(true)
+          return
+        }
+
         const supabase = getSupabaseClient()
         setSupabaseAvailable(true)
         console.log("Supabase configured, initializing auth...")
 
-        // Get initial session
+        // Get initial session with timeout
+        loadingTracker.startLoading('session-check', 'Checking user session')
+        const sessionPromise = supabase.auth.getSession()
+        const sessionTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout')), 5000)
+        )
+
         const {
           data: { session },
-        } = await supabase.auth.getSession()
+        } = await Promise.race([sessionPromise, sessionTimeout]) as any
 
+        loadingTracker.endLoading('session-check')
         console.log("Current session:", session?.user?.email || "No user")
         setUser(session?.user ? { id: session.user.id, email: session.user.email! } : null)
 
         // Listen for auth changes
         const {
           data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
+        } = supabase.auth.onAuthStateChange(async (_event, session) => {
           console.log("Auth state changed:", session?.user?.email || "No user")
           const newUser = session?.user ? { id: session.user.id, email: session.user.email! } : null
           setUser(newUser)
@@ -112,17 +148,55 @@ export default function Home() {
           }
         })
 
+        // Clear loading timeout since we completed successfully
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current)
+          loadingTimeoutRef.current = null
+        }
+
+        loadingTracker.endLoading('auth-init')
         setLoading(false)
+        setInitializationComplete(true)
         return () => subscription.unsubscribe()
       } catch (error) {
         console.error("Supabase initialization error:", error)
+        loadingTracker.failLoading('auth-init', error instanceof Error ? error.message : 'Unknown error')
+        loadingTracker.failLoading('session-check', 'Auth initialization failed')
+        setLoadingError(error instanceof Error ? error.message : 'Failed to initialize authentication')
         setSupabaseAvailable(false)
         setLoading(false)
+        setInitializationComplete(true)
       }
     }
 
     initializeAuth()
+
+    // Cleanup timeouts on unmount
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+      }
+      if (roleCheckTimeoutRef.current) {
+        clearTimeout(roleCheckTimeoutRef.current)
+      }
+    }
   }, [])
+
+  // Additional timeout for role checking
+  useEffect(() => {
+    if (user && mounted && !initializationComplete) {
+      roleCheckTimeoutRef.current = setTimeout(() => {
+        console.warn('Role check timeout, proceeding anyway')
+        setInitializationComplete(true)
+      }, ROLE_CHECK_TIMEOUT)
+    }
+
+    return () => {
+      if (roleCheckTimeoutRef.current) {
+        clearTimeout(roleCheckTimeoutRef.current)
+      }
+    }
+  }, [user, mounted, initializationComplete])
 
   const handleSignOut = async () => {
     try {
@@ -134,10 +208,48 @@ export default function Home() {
     }
   }
 
-  if (loading || !mounted) {
+  // Show loading with error handling and manual refresh option
+  if (loading || !mounted || !initializationComplete) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+          <p className="text-gray-600">Loading WordWise...</p>
+          
+          {loadingError && (
+            <div className="max-w-md mx-auto">
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-amber-800">
+                  {loadingError}
+                </AlertDescription>
+              </Alert>
+              <Button 
+                onClick={handleForceReload}
+                variant="outline" 
+                className="mt-4"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Page
+              </Button>
+            </div>
+          )}
+          
+          {/* Show manual refresh option after 5 seconds */}
+          {!loadingError && (
+            <div className="mt-8">
+              <p className="text-sm text-gray-500 mb-2">Taking longer than expected?</p>
+              <Button 
+                onClick={handleForceReload}
+                variant="ghost" 
+                size="sm"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Page
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
