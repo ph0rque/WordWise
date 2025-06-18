@@ -5,25 +5,56 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get("code")
   const next = searchParams.get("next") ?? "/"
+  const step = searchParams.get("step") // Check if this is part of role selection flow
 
   if (code) {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error) {
-      const forwardedHost = request.headers.get("x-forwarded-host") // original origin before load balancer
+    if (!error && data.user) {
+      const forwardedHost = request.headers.get("x-forwarded-host")
       const isLocalEnv = process.env.NODE_ENV === "development"
+      
+      let redirectUrl = origin
+      if (!isLocalEnv && forwardedHost) {
+        redirectUrl = `https://${forwardedHost}`
+      }
 
-      if (isLocalEnv) {
-        // In development, redirect to localhost
-        return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost) {
-        // In production, use the forwarded host
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
-      } else {
-        // Fallback to origin
-        return NextResponse.redirect(`${origin}${next}`)
+      try {
+        // Check if user has a role assigned in metadata
+        const userRole = data.user.user_metadata?.role || data.user.app_metadata?.role
+        const pendingRole = data.user.user_metadata?.pending_role
+
+        console.log('Auth callback - User role:', userRole, 'Pending role:', pendingRole)
+
+        // If user has pending role data from signup but no assigned role, redirect to assign it
+        if (!userRole && pendingRole) {
+          // Redirect to a client-side page that will handle the role assignment
+          return NextResponse.redirect(`${redirectUrl}/auth/assign-role?pending_role=${pendingRole}`)
+        }
+
+        // If user has an assigned role, redirect appropriately
+        if (userRole) {
+          console.log('Redirecting user with role:', userRole)
+          if (userRole === 'admin') {
+            return NextResponse.redirect(`${redirectUrl}/admin`)
+          } else {
+            return NextResponse.redirect(`${redirectUrl}/`)
+          }
+        }
+
+        // If step is role-selection or user has no role, redirect to auth with role selection
+        if (step === 'role-selection' || (!userRole && !pendingRole)) {
+          return NextResponse.redirect(`${redirectUrl}/auth/role-setup?user_id=${data.user.id}`)
+        }
+
+        // Default redirect
+        return NextResponse.redirect(`${redirectUrl}${next}`)
+      } catch (authError) {
+        console.error("Auth error in callback:", authError)
+        // Fallback to regular redirect if there's an auth issue
+        return NextResponse.redirect(`${redirectUrl}${next}`)
       }
     }
   }

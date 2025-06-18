@@ -1,0 +1,325 @@
+import { createClient } from '@supabase/supabase-js'
+import { getSupabaseClient } from '@/lib/supabase/client'
+import type { UserRole, RolePermissions, UserWithRole, User } from '@/lib/types'
+import { ROLE_PERMISSIONS } from '@/lib/types'
+
+/**
+ * Auto-assign a pending role to the current user
+ * @param pendingRole - The pending role to assign
+ */
+async function autoAssignPendingRole(pendingRole: UserRole): Promise<void> {
+  try {
+    const supabase = getSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      console.error('No session available for auto role assignment')
+      return
+    }
+
+    // Direct client-side role assignment
+    console.log('Auto-assigning pending role:', pendingRole)
+    const { error: updateError } = await supabase.auth.updateUser({
+      data: { role: pendingRole }
+    })
+
+    if (updateError) {
+      console.error('Auto role assignment failed:', updateError)
+    } else {
+      console.log('Auto role assignment successful:', pendingRole)
+    }
+  } catch (error) {
+    console.error('Error in auto role assignment:', error)
+  }
+}
+
+/**
+ * Get the current user's role from user metadata
+ * @returns Promise<UserRole | null> - The user's role or null if not authenticated
+ */
+export async function getCurrentUserRole(): Promise<UserRole | null> {
+  try {
+    const supabase = getSupabaseClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error('Error getting authenticated user:', authError)
+      return null
+    }
+
+    // Get role from user metadata (set during signup)
+    const role = user.user_metadata?.role as UserRole
+    
+    // If no role in metadata, check app_metadata (set by admin)
+    const appRole = user.app_metadata?.role as UserRole
+    
+    // Also check for pending_role (during signup process)
+    const pendingRole = user.user_metadata?.pending_role as UserRole
+    
+    const finalRole = role || appRole || null
+    
+    console.log('getCurrentUserRole debug:', {
+      userId: user.id,
+      email: user.email,
+      user_metadata: user.user_metadata,
+      app_metadata: user.app_metadata,
+      role,
+      appRole,
+      pendingRole,
+      finalRole
+    })
+    
+    // If we have a pending role but no actual role, try to auto-assign it
+    if (!finalRole && pendingRole && ['student', 'admin'].includes(pendingRole)) {
+      console.log('Found pending role, attempting auto-assignment:', pendingRole)
+      // Trigger role assignment in the background (don't await to avoid blocking)
+      autoAssignPendingRole(pendingRole).catch((err: any) => 
+        console.error('Auto role assignment failed:', err)
+      )
+    }
+    
+    return finalRole // Return null if no role is set instead of defaulting to student
+  } catch (error) {
+    console.error('Unexpected error getting user role:', error)
+    return null // Return null instead of defaulting to student
+  }
+}
+
+/**
+ * Get the current user with role information
+ * @returns Promise<UserWithRole | null> - User with role and permissions or null
+ */
+export async function getCurrentUserWithRole(): Promise<UserWithRole | null> {
+  try {
+    const supabase = getSupabaseClient()
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return null
+    }
+
+    // Get role from user metadata
+    const role = (user.user_metadata?.role || user.app_metadata?.role) as UserRole
+    if (!role) {
+      return null // Return null if no role is assigned
+    }
+    const permissions = ROLE_PERMISSIONS[role]
+
+    return {
+      id: user.id,
+      email: user.email!,
+      role,
+      permissions,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+    }
+  } catch (error) {
+    console.error('Unexpected error getting user with role:', error)
+    return null
+  }
+}
+
+/**
+ * Check if the current user has a specific role
+ * @param requiredRole - The role to check for
+ * @returns Promise<boolean> - True if user has the required role
+ */
+export async function hasRole(requiredRole: UserRole): Promise<boolean> {
+  const currentRole = await getCurrentUserRole()
+  return currentRole === requiredRole
+}
+
+/**
+ * Check if the current user is an admin
+ * @returns Promise<boolean> - True if user is an admin
+ */
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  return await hasRole('admin')
+}
+
+/**
+ * Check if the current user is a student
+ * @returns Promise<boolean> - True if user is a student
+ */
+export async function isCurrentUserStudent(): Promise<boolean> {
+  return await hasRole('student')
+}
+
+/**
+ * Check if the current user has a specific permission
+ * @param permission - The permission key to check
+ * @returns Promise<boolean> - True if user has the permission
+ */
+export async function hasPermission(
+  permission: keyof RolePermissions
+): Promise<boolean> {
+  try {
+    const userWithRole = await getCurrentUserWithRole()
+    if (!userWithRole) return false
+    
+    return userWithRole.permissions[permission]
+  } catch (error) {
+    console.error('Error checking permission:', error)
+    return false
+  }
+}
+
+/**
+ * Require a specific role for access (throws if not authorized)
+ * @param requiredRole - The role required for access
+ * @throws Error if user doesn't have required role
+ */
+export async function requireRole(requiredRole: UserRole): Promise<void> {
+  const hasRequiredRole = await hasRole(requiredRole)
+  if (!hasRequiredRole) {
+    throw new Error(`Access denied. Required role: ${requiredRole}`)
+  }
+}
+
+/**
+ * Require admin access (throws if not authorized)
+ * @throws Error if user is not an admin
+ */
+export async function requireAdmin(): Promise<void> {
+  await requireRole('admin')
+}
+
+/**
+ * Require a specific permission for access (throws if not authorized)
+ * @param permission - The permission key required
+ * @throws Error if user doesn't have required permission
+ */
+export async function requirePermission(
+  permission: keyof RolePermissions
+): Promise<void> {
+  const hasRequiredPermission = await hasPermission(permission)
+  if (!hasRequiredPermission) {
+    throw new Error(`Access denied. Required permission: ${permission}`)
+  }
+}
+
+/**
+ * Update a user's role (admin only)
+ * Note: In production, this should be done via Supabase Admin API or database functions
+ * @param userId - The ID of the user to update
+ * @param newRole - The new role to assign
+ * @returns Promise<boolean> - True if successful
+ */
+export async function updateUserRole(
+  userId: string,
+  newRole: UserRole
+): Promise<boolean> {
+  try {
+    // First check if current user is admin
+    await requireAdmin()
+    
+    // Note: Direct user metadata updates require admin privileges
+    // In a production app, this should be done via:
+    // 1. Supabase Admin API
+    // 2. Database functions with elevated privileges
+    // 3. Server-side API routes with admin SDK
+    
+    console.warn('updateUserRole: This function requires admin API access to modify user metadata')
+    
+    // For now, return false to indicate this operation is not available
+    // In a real implementation, you would use the Supabase Admin SDK
+    return false
+  } catch (error) {
+    console.error('Error in updateUserRole:', error)
+    return false
+  }
+}
+
+/**
+ * Get all users with their roles (admin only)
+ * Note: In production, this requires admin API access or custom database views
+ * @returns Promise<UserWithRole[]> - Array of users with role information
+ */
+export async function getAllUsersWithRoles(): Promise<UserWithRole[]> {
+  try {
+    await requireAdmin()
+    
+    // Note: Getting all users requires admin privileges
+    // In a production app, this should be done via:
+    // 1. Supabase Admin API
+    // 2. Custom database views with RLS policies
+    // 3. Server-side API routes with admin SDK
+    
+    console.warn('getAllUsersWithRoles: This function requires admin API access')
+    
+    // Return mock data for development/testing
+    const mockUsers: UserWithRole[] = [
+      {
+        id: 'mock-student-1',
+        email: 'student1@example.com',
+        role: 'student',
+        permissions: ROLE_PERMISSIONS.student,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+      {
+        id: 'mock-student-2',
+        email: 'student2@example.com',
+        role: 'student',
+        permissions: ROLE_PERMISSIONS.student,
+        created_at: '2024-01-02T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+      },
+      {
+        id: 'mock-admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+        permissions: ROLE_PERMISSIONS.admin,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+    ]
+    
+    return mockUsers
+  } catch (error) {
+    console.error('Error in getAllUsersWithRoles:', error)
+    return []
+  }
+}
+
+/**
+ * Simplified role checking utility for server-side use
+ * @param request - The request object containing authorization header
+ * @param requiredRole - The role required to access the resource
+ * @returns Promise<{ authorized: boolean; user?: any; error?: string }>
+ */
+export async function checkRoleAuth(request: Request, requiredRole: UserRole) {
+  try {
+    const authHeader = request.headers.get('Authorization')
+    if (!authHeader) {
+      return { authorized: false, error: 'No authorization header' }
+    }
+
+    // Extract token from Authorization header
+    const token = authHeader.replace('Bearer ', '')
+    
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    // Verify the token and get user
+    const { data: { user }, error } = await supabase.auth.getUser(token)
+    if (error || !user) {
+      return { authorized: false, error: 'Invalid token or user not found' }
+    }
+
+    // Check user role from metadata
+    const userRole = (user.user_metadata?.role || user.app_metadata?.role || 'student') as UserRole
+    
+    // Check if user has required role
+    if (requiredRole === 'admin' && userRole !== 'admin') {
+      return { authorized: false, error: 'Admin access required' }
+    }
+
+    return { authorized: true, user }
+  } catch (error) {
+    console.error('Role auth check error:', error)
+    return { authorized: false, error: 'Internal server error' }
+  }
+} 

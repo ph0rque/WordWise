@@ -1,12 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { TextEditor, SuggestionsPanel, useSuggestionsPanelProps } from "@/components/text-editor"
-import { AuthForm } from "@/components/auth/auth-form"
+import { EnhancedAuthForm } from "@/components/auth/enhanced-auth-form"
 import { DemoEditor } from "@/components/demo-editor"
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client"
 import type { User, Document } from "@/lib/types"
 import { DocumentManager } from "@/components/document-manager"
+import { RoleBasedHeader, RoleBasedNotifications } from "@/components/navigation/role-based-header"
+import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { GraduationCap, AlertCircle } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,6 +21,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export default function Home() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirectTo')
+  
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [supabaseAvailable, setSupabaseAvailable] = useState(false)
@@ -28,6 +38,25 @@ export default function Home() {
   const [ignoreSuggestion, setIgnoreSuggestion] = useState<any>(null)
   const [getIconForType, setGetIconForType] = useState<any>(null)
   const [suggestionsPanelProps, setSuggestionsPanelProps] = useState<any>({})
+  const [mounted, setMounted] = useState(false)
+
+  // Role-based features - only use after component mounts to avoid hydration issues
+  const roleFeatures = useRoleBasedFeatures()
+  const {
+    canCreateDocuments,
+    canUseGrammarChecker,
+    showAdminNavigation,
+    showUpgradePrompts,
+    currentRole,
+    isAuthenticated: roleBasedAuth,
+  } = mounted ? roleFeatures : {
+    canCreateDocuments: false,
+    canUseGrammarChecker: false,
+    showAdminNavigation: false,
+    showUpgradePrompts: false,
+    currentRole: null,
+    isAuthenticated: false,
+  }
 
   const refreshDocuments = () => setRefreshDocumentsFlag((f) => f + 1)
 
@@ -39,6 +68,11 @@ export default function Home() {
     setCurrentDocument(doc)
     refreshDocuments()
   }
+
+  // Set mounted state to avoid hydration issues
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -68,7 +102,14 @@ export default function Home() {
           data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
           console.log("Auth state changed:", session?.user?.email || "No user")
-          setUser(session?.user ? { id: session.user.id, email: session.user.email! } : null)
+          const newUser = session?.user ? { id: session.user.id, email: session.user.email! } : null
+          setUser(newUser)
+          
+          // Handle redirect after authentication
+          if (newUser && redirectTo) {
+            console.log("Redirecting authenticated user to:", redirectTo)
+            router.push(redirectTo)
+          }
         })
 
         setLoading(false)
@@ -93,7 +134,7 @@ export default function Home() {
     }
   }
 
-  if (loading) {
+  if (loading || !mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
@@ -109,56 +150,139 @@ export default function Home() {
 
   if (!user) {
     console.log("No user, showing auth form")
-    return <AuthForm />
+    return (
+      <>
+        {redirectTo && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 m-4">
+            <p className="text-blue-800 text-sm">
+              Please sign in to access <strong>{redirectTo}</strong>
+            </p>
+          </div>
+        )}
+        <EnhancedAuthForm />
+      </>
+    )
   }
 
   console.log("User authenticated, showing main app")
-  return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <div className="container max-w-7xl px-4 py-8 mx-auto">
-        <div className="flex flex-row items-start gap-8">
-          {/* Main editor area */}
-          <div className="basis-2/3 min-w-0">
-            <TextEditor
-              user={user}
-              onSignOut={handleSignOut}
-              refreshDocuments={refreshDocuments}
-              currentDocument={currentDocument}
-              setCurrentDocument={setCurrentDocument}
-              onSuggestionsPanelPropsChange={setSuggestionsPanelProps}
-            />
-          </div>
-          {/* Sidebar area */}
-          <div className="basis-1/3 flex flex-col items-stretch">
-            {/* Email/user info at the top */}
-            <div className="flex justify-end mb-6">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="bg-white rounded-lg px-4 py-2 shadow flex items-center gap-2 text-sm text-slate-700 hover:bg-slate-100 transition">
-                    {user.email}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            {/* Suggestions and My Documents stacked */}
-            <div className="space-y-6">
-              <SuggestionsPanel {...suggestionsPanelProps} />
-              <DocumentManager
-                onSelectDocument={handleSelectDocument}
-                onNewDocument={handleNewDocument}
-                currentDocumentId={currentDocument?.id}
-                refreshDocumentsFlag={refreshDocumentsFlag}
-              />
+
+  // Show role setup prompt if user has no role
+  if (user && showUpgradePrompts) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <RoleBasedHeader userEmail={user.email} onSignOut={handleSignOut} />
+        <div className="container max-w-4xl mx-auto px-4 py-8">
+          <div className="text-center space-y-6">
+            <div className="p-8 bg-white rounded-lg shadow-sm border">
+              <GraduationCap className="h-16 w-16 text-emerald-600 mx-auto mb-4" />
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to WordWise!</h1>
+              <p className="text-gray-600 mb-6">
+                To get started, please select your role to access the appropriate features.
+              </p>
+              <Button 
+                onClick={() => window.location.href = '/auth/role-setup'}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                Complete Profile Setup
+              </Button>
             </div>
           </div>
         </div>
+      </main>
+    )
+  }
+
+  // Redirect admins to dashboard if they're on the main page
+  if (showAdminNavigation && currentRole === 'admin') {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <RoleBasedHeader userEmail={user.email} onSignOut={handleSignOut} />
+        <div className="container max-w-4xl mx-auto px-4 py-8">
+          <div className="text-center space-y-6">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                As an administrator, you might want to visit the{" "}
+                <Button 
+                  variant="link" 
+                  className="p-0 h-auto"
+                  onClick={() => window.location.href = '/admin'}
+                >
+                  Admin Dashboard
+                </Button>{" "}
+                to manage students and view analytics.
+              </AlertDescription>
+            </Alert>
+            
+            <div className="p-8 bg-white rounded-lg shadow-sm border">
+              <h1 className="text-2xl font-bold text-gray-900 mb-4">Admin Text Editor</h1>
+              <p className="text-gray-600 mb-6">
+                You can use the text editor below or visit the admin dashboard to manage students.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      {/* Role-based header */}
+      <RoleBasedHeader userEmail={user.email} onSignOut={handleSignOut} />
+      
+      <div className="container max-w-7xl px-4 py-8 mx-auto">
+        {/* Role-based notifications */}
+        <div className="mb-6">
+          <RoleBasedNotifications />
+        </div>
+
+        {/* Check if user has permissions for main features */}
+        {!canCreateDocuments || !canUseGrammarChecker ? (
+          <div className="text-center py-12">
+            <Alert className="max-w-md mx-auto">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                You don't have permission to access the text editor. 
+                Please contact your administrator for assistance.
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
+          <div className="flex flex-row items-start gap-8">
+            {/* Main editor area */}
+            <div className="basis-2/3 min-w-0">
+              <TextEditor
+                user={user}
+                onSignOut={handleSignOut}
+                refreshDocuments={refreshDocuments}
+                currentDocument={currentDocument}
+                setCurrentDocument={setCurrentDocument}
+                onSuggestionsPanelPropsChange={setSuggestionsPanelProps}
+              />
+            </div>
+            {/* Sidebar area */}
+            <div className="basis-1/3 flex flex-col items-stretch">
+              {/* Suggestions and My Documents stacked */}
+              <div className="space-y-6">
+                {canUseGrammarChecker && (
+                  <SuggestionsPanel {...suggestionsPanelProps} />
+                )}
+                {canCreateDocuments && (
+                  <DocumentManager
+                    onSelectDocument={handleSelectDocument}
+                    onNewDocument={handleNewDocument}
+                    currentDocumentId={currentDocument?.id}
+                    refreshDocumentsFlag={refreshDocumentsFlag}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
         <footer className="mt-16 text-center text-sm text-slate-500">
-          <p>© 2025 WordWise. A simplified Grammarly clone with document storage.</p>
+          <p>© 2025 WordWise. An AI-powered academic writing assistant for high school students.</p>
         </footer>
       </div>
     </main>

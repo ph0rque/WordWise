@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileText, Plus, MoreVertical, Trash2, Edit, AlertCircle, Database } from "lucide-react"
+import { FileText, Plus, MoreVertical, Trash2, Edit, AlertCircle, Database, Lock } from "lucide-react"
+import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import type { Document } from "@/lib/types"
 
 interface DocumentManagerProps {
@@ -25,6 +26,14 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
   const [showNewDocDialog, setShowNewDocDialog] = useState(false)
   const [error, setError] = useState<string>("")
   const [needsSetup, setNeedsSetup] = useState(false)
+
+  // Role-based features
+  const {
+    canCreateDocuments,
+    canSaveWork,
+    currentRole,
+    isAuthenticated,
+  } = useRoleBasedFeatures()
 
   useEffect(() => {
     if (isSupabaseConfigured()) {
@@ -203,12 +212,40 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
     )
   }
 
+  // Show permission error if user can't create documents
+  if (!isAuthenticated) {
+    return null
+  }
+
+  if (!canCreateDocuments) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <Lock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Access Restricted</h3>
+          <p className="text-gray-500 text-sm">
+            You don't have permission to access documents. 
+            Please contact your administrator.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">My Documents</CardTitle>
-          {!needsSetup && (
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            My Documents
+            {currentRole === 'admin' && (
+              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Admin
+              </span>
+            )}
+          </CardTitle>
+          {!needsSetup && canCreateDocuments && (
             <Dialog open={showNewDocDialog} onOpenChange={setShowNewDocDialog}>
               <DialogTrigger asChild>
                 <Button size="sm" className="h-8">

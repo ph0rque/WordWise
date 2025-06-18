@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import type { UserRole } from '@/lib/types'
 
 let supabaseInstance: SupabaseClient | null = null
 
@@ -14,14 +15,8 @@ export function getSupabaseClient() {
     throw new Error("Supabase environment variables are not configured")
   }
 
-  // Get the current site URL for redirects
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000")
-
   supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      redirectTo: `${siteUrl}/auth/callback`,
       autoRefreshToken: true,
       persistSession: true,
     },
@@ -33,3 +28,153 @@ export function getSupabaseClient() {
 export function isSupabaseConfigured() {
   return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 }
+
+/**
+ * Enhanced Supabase client with role-based query helpers
+ * Provides convenient methods for role-aware database operations
+ */
+export class SupabaseRoleClient {
+  private client: SupabaseClient
+
+  constructor() {
+    this.client = getSupabaseClient()
+  }
+
+  /**
+   * Get user documents with role-based access
+   * Students see only their own documents, admins see all
+   */
+  async getUserDocuments(userId?: string) {
+    let query = this.client
+      .from('documents')
+      .select('*')
+      .order('updated_at', { ascending: false })
+
+    // If userId is provided (admin use case), filter by that user
+    if (userId) {
+      query = query.eq('user_id', userId)
+    }
+    // Otherwise, rely on RLS policies to filter appropriately
+
+    return query
+  }
+
+  /**
+   * Create a document (automatically sets user_id from auth context)
+   */
+  async createDocument(title: string, content: string = '') {
+    const { data: { user } } = await this.client.auth.getUser()
+    if (!user) {
+      throw new Error('User must be authenticated to create documents')
+    }
+
+    return this.client
+      .from('documents')
+      .insert({
+        title,
+        content,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+  }
+
+  /**
+   * Update a document (RLS ensures proper access control)
+   */
+  async updateDocument(documentId: string, updates: { title?: string; content?: string }) {
+    return this.client
+      .from('documents')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', documentId)
+      .select()
+      .single()
+  }
+
+  /**
+   * Delete a document (RLS ensures proper access control)
+   */
+  async deleteDocument(documentId: string) {
+    return this.client
+      .from('documents')
+      .delete()
+      .eq('id', documentId)
+  }
+
+  /**
+   * Get all users (admin only - will be filtered by RLS)
+   */
+  async getAllUsers() {
+    return this.client
+      .from('auth.users')
+      .select('id, email, role, created_at, updated_at')
+      .order('created_at', { ascending: false })
+  }
+
+  /**
+   * Update user role (admin only - will be filtered by RLS)
+   */
+  async updateUserRole(userId: string, role: UserRole) {
+    return this.client
+      .from('auth.users')
+      .update({ 
+        role,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+  }
+
+  /**
+   * Get current user with role information
+   */
+  async getCurrentUserWithRole() {
+    const { data: { user }, error: authError } = await this.client.auth.getUser()
+    if (authError || !user) {
+      return { data: null, error: authError }
+    }
+
+    const { data, error } = await this.client
+      .from('auth.users')
+      .select('role, created_at, updated_at')
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      return { data: null, error }
+    }
+
+    return {
+      data: {
+        id: user.id,
+        email: user.email!,
+        role: (data.role as UserRole) || 'student',
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      },
+      error: null
+    }
+  }
+
+  /**
+   * Check if current user has admin role
+   */
+  async isCurrentUserAdmin(): Promise<boolean> {
+    const { data } = await this.getCurrentUserWithRole()
+    return data?.role === 'admin'
+  }
+
+  /**
+   * Get the underlying Supabase client for direct access
+   */
+  get raw() {
+    return this.client
+  }
+}
+
+// Create and export a singleton instance
+export const supabaseRoleClient = new SupabaseRoleClient()

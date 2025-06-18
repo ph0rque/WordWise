@@ -19,9 +19,14 @@ export interface Document {
   updated_at: string
 }
 
+export type UserRole = "student" | "admin"
+
 export interface User {
   id: string
   email: string
+  role?: UserRole
+  created_at?: string
+  updated_at?: string
 }
 
 export interface GrammarCheckSettings {
@@ -40,4 +45,39 @@ export interface SuggestionAction {
   originalText: string
   position: number
   timestamp: number
+}
+
+// Role-based permission types
+export interface RolePermissions {
+  canViewAllDocuments: boolean
+  canViewKeystrokeRecordings: boolean
+  canManageUsers: boolean
+  canAccessAnalytics: boolean
+  canExportData: boolean
+}
+
+// User with role-specific data
+export interface UserWithRole extends User {
+  role: UserRole
+  permissions: RolePermissions
+  email_confirmed_at?: string | null
+  last_sign_in_at?: string | null
+}
+
+// Role configuration
+export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
+  student: {
+    canViewAllDocuments: false,
+    canViewKeystrokeRecordings: false,
+    canManageUsers: false,
+    canAccessAnalytics: false,
+    canExportData: false,
+  },
+  admin: {
+    canViewAllDocuments: true,
+    canViewKeystrokeRecordings: true,
+    canManageUsers: true,
+    canAccessAnalytics: true,
+    canExportData: true,
+  },
 }
