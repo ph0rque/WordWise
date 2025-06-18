@@ -14,11 +14,13 @@ import {
   LogOut,
   AlertCircle,
   Plus,
-  Search
+  Search,
+  Keyboard
 } from "lucide-react"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { getCurrentUserRole, requireAdmin } from "@/lib/auth/roles"
 import { StudentAnalytics } from "@/components/admin/student-analytics"
+import { KeystrokeViewer } from "@/components/admin/keystroke-viewer"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -323,9 +325,10 @@ export default function AdminDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="students" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="students">Student Management</TabsTrigger>
             <TabsTrigger value="analytics">Analytics Overview</TabsTrigger>
+            <TabsTrigger value="keystrokes">Keystroke Recordings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="students" className="space-y-6">
@@ -447,6 +450,10 @@ export default function AdminDashboard() {
               stats={stats}
               onStudentSelect={handleStudentSelect}
             />
+          </TabsContent>
+
+          <TabsContent value="keystrokes" className="space-y-6">
+            <KeystrokeViewer />
           </TabsContent>
         </Tabs>
       </div>

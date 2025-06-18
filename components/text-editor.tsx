@@ -56,6 +56,7 @@ import { TextStats } from "@/components/text-stats"
 import ReadabilityDashboard from "@/components/analysis/readability-dashboard"
 import VocabularyEnhancer from "@/components/analysis/vocabulary-enhancer"
 import { ChatPanel } from "@/components/tutor/chat-panel"
+import { RecordingControls } from "@/components/keystroke/recording-controls"
 
 interface TextEditorProps {
   user: SupabaseUser
@@ -81,6 +82,7 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
   const [manualCheckRequested, setManualCheckRequested] = useState(false)
   const grammarCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [isClient, setIsClient] = useState(false)
+  const textAreaRef = useRef<HTMLTextAreaElement>(null)
 
   const [settings, setSettings] = useState<GrammarCheckSettings>({
     enableAI: false,
@@ -714,21 +716,38 @@ export function TextEditor({ user, onSignOut, refreshDocuments, currentDocument,
             </div>
 
             <TabsContent value="editor" className="mt-0">
-              <Card>
-                <CardContent className="p-4">
-                  <Textarea
-                    placeholder={
-                      aiAvailable
-                        ? "Start typing here... We'll check your grammar, spelling, and style with AI assistance."
-                        : "Start typing here... We'll check your grammar, spelling, and style using pattern matching."
-                    }
-                    className="min-h-[400px] border-none focus-visible:ring-0 resize-none text-base"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    style={{ resize: "none" }}
-                  />
-                </CardContent>
-              </Card>
+              <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
+                {/* Main Editor */}
+                <Card>
+                  <CardContent className="p-4">
+                    <Textarea
+                      placeholder={
+                        aiAvailable
+                          ? "Start typing here... We'll check your grammar, spelling, and style with AI assistance."
+                          : "Start typing here... We'll check your grammar, spelling, and style using pattern matching."
+                      }
+                      className="min-h-[400px] border-none focus-visible:ring-0 resize-none text-base"
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      style={{ resize: "none" }}
+                      ref={textAreaRef}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Recording Controls Sidebar */}
+                {user.role === 'student' && (
+                  <div className="space-y-4">
+                    <RecordingControls
+                      documentId={currentDocument?.id || `temp-doc-${user.id}`}
+                      documentTitle={documentTitle}
+                      studentName={user.email || 'Student'}
+                      textAreaRef={textAreaRef}
+                      isEnabled={true}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Save section below text box */}
               <div className="flex items-center gap-4 mt-4">
