@@ -2,7 +2,21 @@ import type { Suggestion, SuggestionAction } from "./types"
 
 // Generate a unique ID for a suggestion based on its content and position
 export function generateSuggestionId(suggestion: Suggestion): string {
-  return `${suggestion.type}-${suggestion.position}-${suggestion.originalText.replace(/\s+/g, "_")}`
+  // Create a stable hash based on content to ensure uniqueness without timestamps
+  const originalText = suggestion.originalText.replace(/\s+/g, "_").substring(0, 30)
+  const suggestedText = suggestion.suggestedText?.replace(/\s+/g, "_").substring(0, 30) || "no-suggestion"
+  const reasonHash = suggestion.reason ? suggestion.reason.substring(0, 10) : "no-reason"
+  
+  // Create a simple hash from the combined content
+  const content = `${suggestion.type}-${suggestion.position}-${originalText}-${suggestedText}-${reasonHash}`
+  let hash = 0
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  
+  return `${suggestion.type}-${suggestion.position}-${Math.abs(hash)}`
 }
 
 // Check if a suggestion should be filtered out based on previous actions

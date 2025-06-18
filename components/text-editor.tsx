@@ -959,7 +959,7 @@ export function SuggestionsPanel({
         <div className="space-y-3">
           {suggestions.map((suggestion, index) => (
             <SuggestionCard
-              key={suggestion.id || index}
+              key={suggestion.id || `${suggestion.type}-${suggestion.position}-${suggestion.originalText}-${suggestion.suggestedText}-${index}`}
               suggestion={suggestion}
               onApply={() => applySuggestion(suggestion)}
               onIgnore={() => ignoreSuggestion(suggestion)}
