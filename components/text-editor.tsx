@@ -69,7 +69,7 @@ export function TextEditor({
           if (node.type.name === 'heading') {
             return "What's the title?"
           }
-          return 'Start writing your thoughts here... Use "/" for commands or select text for formatting options.'
+          return "Start writing your thoughts here... Use \"/\" for commands or select text for formatting options."
         },
       }),
       CharacterCount.configure({

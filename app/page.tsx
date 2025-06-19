@@ -170,36 +170,17 @@ export default function Page() {
         setSupabaseAvailable(true)
         console.log("Supabase configured, initializing auth...")
 
-        // Add timeout for session check with longer timeout
+        // Simple session check without timeout
         console.log("🔍 Getting session...")
-        let session = null
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         
-        try {
-          const sessionPromise = supabase.auth.getSession()
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Session check timeout')), 20000) // 20 seconds
-          )
-
-          const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any
-          session = sessionData?.session
+        if (sessionError) {
+          console.error("❌ Session error:", sessionError)
+          setUser(null)
+        } else {
           console.log("✅ Session retrieved:", session?.user?.email || "No user")
-        } catch (sessionError) {
-          console.warn("⚠️ Main page session check failed, trying fallback:", sessionError)
-          // Try fallback without timeout
-          try {
-            const { data: fallbackData } = await supabase.auth.getSession()
-            session = fallbackData?.session
-            console.log("✅ Fallback session retrieved:", session?.user?.email || "No user")
-          } catch (fallbackError) {
-            console.error("❌ Fallback session check failed:", fallbackError)
-            // Don't set error here, let useUserRole handle authentication
-            setUser(null)
-            setLoading(false)
-            return
-          }
+          setUser(session?.user || null)
         }
-        
-        setUser(session?.user || null)
 
         // Listen for auth changes and handle token refresh
         console.log("🔗 Setting up auth state listener...")
