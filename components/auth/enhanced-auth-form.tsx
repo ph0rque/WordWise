@@ -11,6 +11,7 @@ import { Loader2, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { RoleSelector, CompactRoleSelector } from "./role-selector"
 import { getCurrentUserRole } from "@/lib/auth/roles"
+import { OnboardingConsent } from "./onboarding-consent"
 import type { UserRole } from "@/lib/types"
 import { useRouter } from "next/navigation"
 
@@ -30,6 +31,7 @@ export function EnhancedAuthForm() {
   const [currentTab, setCurrentTab] = useState<'signin' | 'signup'>('signin')
   const [pendingUserId, setPendingUserId] = useState<string | null>(null)
   const [checkingRole, setCheckingRole] = useState(false)
+  const [isConsented, setIsConsented] = useState(false)
   const router = useRouter()
 
   // Check if user already has a role assigned (for existing users)
@@ -72,6 +74,13 @@ export function EnhancedAuthForm() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Check consent for students
+    if (selectedRole === 'student' && !isConsented) {
+      setError("Please review and accept the keystroke recording consent to continue.")
+      return
+    }
+    
     setLoading(true)
     setError("")
     setMessage("")
@@ -91,7 +100,7 @@ export function EnhancedAuthForm() {
             // Directly assign the role and other data
             role: selectedRole,
             display_name: displayName,
-            has_consented_to_keystrokes: selectedRole === 'student' // Auto-consent students
+            has_consented_to_keystrokes: selectedRole === 'student' ? isConsented : false
           }
         },
       })
@@ -373,7 +382,19 @@ export function EnhancedAuthForm() {
                   onRoleChange={setSelectedRole}
                 />
                 
-                <Button type="submit" className="w-full" disabled={loading}>
+                {/* Keystroke Consent for Students */}
+                {selectedRole === "student" && (
+                  <OnboardingConsent
+                    isConsented={isConsented}
+                    onConsentChange={setIsConsented}
+                  />
+                )}
+                
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={loading || (selectedRole === 'student' && !isConsented)}
+                >
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign Up as {selectedRole === 'student' ? 'Student' : 'Teacher/Administrator'}
                 </Button>
