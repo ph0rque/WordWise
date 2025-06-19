@@ -21,6 +21,7 @@ interface AuthStep {
 export function EnhancedAuthForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [displayName, setDisplayName] = useState("")
   const [selectedRole, setSelectedRole] = useState<UserRole>("student")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")
@@ -88,7 +89,8 @@ export function EnhancedAuthForm() {
           emailRedirectTo: `${siteUrl}/auth/callback?step=role-selection`,
           data: {
             // We'll store the selected role temporarily, but won't set it until email is confirmed
-            pending_role: selectedRole
+            pending_role: selectedRole,
+            display_name: displayName
           }
         },
       })
@@ -330,6 +332,15 @@ export function EnhancedAuthForm() {
 
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
+                <div>
+                  <Input
+                    type="text"
+                    placeholder="Display Name (e.g., John Smith)"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
+                  />
+                </div>
                 <div>
                   <Input
                     type="email"

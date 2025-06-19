@@ -239,21 +239,37 @@ export async function updateUserRole(
 export async function completeOnboarding(
   role: UserRole,
   hasConsented: boolean,
-  name: { firstName: string; lastName: string }
+  name?: { firstName: string; lastName: string }
 ): Promise<{ user: User | null; error: any }> {
   try {
     const supabase = getSupabaseClient()
+    
+    // Get current user to check for existing display_name
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const existingDisplayName = currentUser?.user_metadata?.display_name
+    
+    // Prepare update data
+    const updateData: any = {
+      role,
+      has_consented_to_keystrokes: hasConsented,
+    }
+    
+    // If name is provided, use it to create/update display_name and individual name fields
+    if (name) {
+      updateData.first_name = name.firstName
+      updateData.last_name = name.lastName
+      updateData.display_name = `${name.firstName} ${name.lastName}`.trim()
+    }
+    // If no name provided but we have an existing display_name from signup, keep it
+    else if (existingDisplayName) {
+      updateData.display_name = existingDisplayName
+    }
+    
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.updateUser({
-      data: {
-        role,
-        has_consented_to_keystrokes: hasConsented,
-        first_name: name.firstName,
-        last_name: name.lastName,
-        display_name: `${name.firstName} ${name.lastName}`.trim(),
-      },
+      data: updateData,
     })
 
     if (userError) {

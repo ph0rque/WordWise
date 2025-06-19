@@ -96,14 +96,22 @@ export default function RoleSetupPage() {
 
         setInitializing(false)
         
-        // If auto-assign is true and we have a pending role, automatically complete setup
+        // If auto-assign is true and we have a pending role, check if we can auto-complete
         if (autoAssign && (pendingRole || userPendingRole)) {
           const roleToAssign = (pendingRole || userPendingRole) as UserRole
           // Auto-consent for students in streamlined flow
           if (roleToAssign === 'student') {
             setIsConsented(true)
           }
-          // Don't auto-complete if we need names - let user fill them out
+          
+          // If we have a display_name from signup, we can auto-complete without asking for names
+          const hasDisplayName = session.user.user_metadata?.display_name
+          if (hasDisplayName) {
+            // Auto-complete the onboarding since we have all needed info
+            setTimeout(() => {
+              handleAutoCompleteOnboarding(roleToAssign, hasDisplayName)
+            }, 1000)
+          }
         }
       } catch (error) {
         console.error("Error initializing role setup:", error)
@@ -123,6 +131,42 @@ export default function RoleSetupPage() {
     }
   }
 
+  const handleAutoCompleteOnboarding = async (role: UserRole, displayName: string) => {
+    if (!userId) {
+      setError("No user session found. Please try signing in again.")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+
+    try {
+      // Use the completeOnboarding function without requiring names since we have display_name
+      const { error: onboardingError } = await completeOnboarding(
+        role,
+        role === "student" ? true : false // Auto-consent for students
+      )
+
+      if (onboardingError) {
+        throw onboardingError
+      }
+      
+      setMessage(`Welcome ${displayName}! Your ${role} account has been set up successfully.`)
+      
+      // Redirect after a brief delay
+      setTimeout(() => {
+        handleRoleBasedRedirect(role)
+      }, 2000)
+    } catch (err) {
+      console.error("Auto onboarding error:", err)
+      setError("Failed to complete setup automatically. Please try the manual setup.")
+      // Fall back to manual setup if auto-complete fails
+      setAutoAssign(false)
+    }
+    
+    setLoading(false)
+  }
+
   const handleCompleteRoleSetup = async () => {
     if (!userId) {
       setError("No user session found. Please try signing in again.")
@@ -130,7 +174,9 @@ export default function RoleSetupPage() {
     }
 
     if (loading) return
-    if (!firstName || !lastName) {
+    
+    // Only require names if not auto-assigning (which means we don't have display_name from signup)
+    if (!(autoAssign && pendingRole) && (!firstName || !lastName)) {
       setError("Please enter your first and last name.")
       return
     }
@@ -141,10 +187,12 @@ export default function RoleSetupPage() {
 
     try {
       // Use the new completeOnboarding function
+      // Only pass name if we have both first and last names
+      const nameData = firstName && lastName ? { firstName, lastName } : undefined
       const { error: onboardingError } = await completeOnboarding(
         selectedRole,
         selectedRole === "student" ? isConsented : false,
-        { firstName, lastName }
+        nameData
       )
 
       if (onboardingError) {
@@ -201,31 +249,34 @@ export default function RoleSetupPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Personal Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="first-name">First Name</Label>
-                  <Input
-                    id="first-name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Jane"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="last-name">Last Name</Label>
-                  <Input
-                    id="last-name"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Doe"
-                    required
-                  />
+            {/* Only show name inputs if not auto-assigning or if no display name exists */}
+            {!(autoAssign && pendingRole) && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Personal Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="first-name">First Name</Label>
+                    <Input
+                      id="first-name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Jane"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="last-name">Last Name</Label>
+                    <Input
+                      id="last-name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Doe"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {!(autoAssign && pendingRole) && (
               <RoleSelector
@@ -261,17 +312,34 @@ export default function RoleSetupPage() {
               />
             )}
 
-            <div className="flex justify-end">
-              <Button
-                onClick={handleCompleteRoleSetup}
-                disabled={loading || (selectedRole === "student" && !isConsented) || !firstName || !lastName}
-              >
-                {loading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                Complete Setup
-              </Button>
-            </div>
+            {/* Only show complete button if not auto-assigning */}
+            {!(autoAssign && pendingRole) && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleCompleteRoleSetup}
+                  disabled={
+                    loading || 
+                    (selectedRole === "student" && !isConsented) || 
+                    (!(autoAssign && pendingRole) && (!firstName || !lastName))
+                  }
+                >
+                  {loading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Complete Setup
+                </Button>
+              </div>
+            )}
+            
+            {/* Show loading state for auto-assignment */}
+            {autoAssign && pendingRole && loading && (
+              <div className="flex justify-center">
+                <div className="flex items-center gap-2 text-emerald-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Setting up your account...</span>
+                </div>
+              </div>
+            )}
             
             {error && (
               <Alert className="mt-4 border-red-200 bg-red-50">
