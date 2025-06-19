@@ -23,14 +23,15 @@ import {
 import { useRouter } from "next/navigation"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
+import { User as SupabaseUser } from "@supabase/supabase-js"
 
 interface RoleBasedHeaderProps {
-  userEmail?: string
-  onSignOut?: () => void
-  onToggleSidebar?: () => void
+  user?: SupabaseUser | null;
+  onSignOut?: () => void;
+  onToggleSidebar?: () => void;
 }
 
-export function RoleBasedHeader({ userEmail, onSignOut, onToggleSidebar }: RoleBasedHeaderProps) {
+export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedHeaderProps) {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   
@@ -79,56 +80,23 @@ export function RoleBasedHeader({ userEmail, onSignOut, onToggleSidebar }: RoleB
     console.log('Navigate to settings')
   }
 
-  if (!mounted || !isAuthenticated || !userEmail) {
+  const firstName = user?.user_metadata?.first_name
+
+  if (!mounted || !isAuthenticated || !user) {
     return null
   }
 
   return (
-    <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200 shadow-sm">
-      {/* Logo/Brand */}
-      <div className="flex items-center space-x-3">
-        <div className="p-2 bg-emerald-100 rounded-lg">
-          <GraduationCap className="h-6 w-6 text-emerald-600" />
-        </div>
-        <h1 className="text-xl font-bold text-gray-900">WordWise</h1>
-        {currentRole === "student" && (
-          <Badge variant="outline" className="font-medium">
-            Academic
-          </Badge>
-        )}
+    <div className="contents">
+      <div className="flex flex-1 items-center gap-4">
+        <h1 className="text-xl font-bold text-gray-900">WordWise AI</h1>
       </div>
-
-      {/* Navigation Links */}
-      <div className="flex items-center space-x-4">
-        {showAdminNavigation && (
-          <>
-            {canViewAdminDashboard && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleAdminDashboard}
-                className="flex items-center space-x-2"
-              >
-                <BarChart3 className="h-4 w-4" />
-                <span>Dashboard</span>
-              </Button>
-            )}
-            
-            {canManageStudents && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push('/admin')}
-                className="flex items-center space-x-2"
-              >
-                <Users className="h-4 w-4" />
-                <span>Students</span>
-              </Button>
-            )}
-          </>
+      <div className="flex items-center gap-4">
+        {firstName && (
+          <span className="hidden sm:inline-block text-sm text-gray-600">
+            Hi, {firstName}
+          </span>
         )}
-
-        {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
@@ -138,7 +106,7 @@ export function RoleBasedHeader({ userEmail, onSignOut, onToggleSidebar }: RoleB
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <div className="px-3 py-2 border-b">
-              <div className="font-medium text-sm">{userEmail}</div>
+              <div className="font-medium text-sm">{user.email}</div>
               <div className="text-xs text-gray-500 capitalize">
                 {currentRole || 'No role assigned'}
               </div>

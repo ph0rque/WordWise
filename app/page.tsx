@@ -6,7 +6,8 @@ import { TextEditor } from "@/components/text-editor"
 import { EnhancedAuthForm } from "@/components/auth/enhanced-auth-form"
 import { DemoEditor } from "@/components/demo-editor"
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client"
-import type { User, Document } from "@/lib/types"
+import type { Document } from "@/lib/types"
+import { User as SupabaseUser } from "@supabase/supabase-js"
 import { DocumentManager } from "@/components/document-manager"
 import { RoleBasedHeader, RoleBasedNotifications } from "@/components/navigation/role-based-header"
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
@@ -39,11 +40,11 @@ function SearchParamsHandler({ onRedirectTo }: { onRedirectTo: (redirectTo: stri
   return null
 }
 
-export default function Home() {
+export default function Page() {
   const router = useRouter()
   const [redirectTo, setRedirectTo] = useState<string | null>(null)
   
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<SupabaseUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingError, setLoadingError] = useState<string | null>(null)
   const [supabaseAvailable, setSupabaseAvailable] = useState(false)
@@ -58,7 +59,6 @@ export default function Home() {
   const [getIconForType, setGetIconForType] = useState<any>(null)
   const [suggestionsPanelProps, setSuggestionsPanelProps] = useState<any>({})
   const [mounted, setMounted] = useState(false)
-  const [initializationComplete, setInitializationComplete] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   // Timeout refs for cleanup
@@ -74,14 +74,9 @@ export default function Home() {
     showUpgradePrompts,
     currentRole,
     isAuthenticated: roleBasedAuth,
-  } = mounted && initializationComplete ? roleFeatures : {
-    canCreateDocuments: false,
-    canUseGrammarChecker: false,
-    showAdminNavigation: false,
-    showUpgradePrompts: false,
-    currentRole: null,
-    isAuthenticated: false,
-  }
+    loading: roleLoading,
+    error: roleError,
+  } = roleFeatures
 
   const refreshDocuments = () => setRefreshDocumentsFlag((f) => f + 1)
 
@@ -133,14 +128,6 @@ export default function Home() {
       try {
         // Start tracking initialization
         loadingTracker.startLoading('auth-init', 'Initializing authentication')
-        
-        // Set up loading timeout
-        loadingTimeoutRef.current = setTimeout(() => {
-          console.warn('Loading timeout reached, forcing completion')
-          loadingTracker.failLoading('auth-init', 'Timeout reached')
-          setLoadingError('Loading is taking longer than expected. Please try refreshing the page.')
-          setLoading(false)
-        }, LOADING_TIMEOUT)
 
         // Check if Supabase is configured
         if (!isSupabaseConfigured()) {
@@ -148,7 +135,6 @@ export default function Home() {
           loadingTracker.endLoading('auth-init')
           setSupabaseAvailable(false)
           setLoading(false)
-          setInitializationComplete(true)
           return
         }
 
@@ -156,45 +142,30 @@ export default function Home() {
         setSupabaseAvailable(true)
         console.log("Supabase configured, initializing auth...")
 
-        // Get initial session with timeout
+        // Get initial session
         loadingTracker.startLoading('session-check', 'Checking user session')
-        const sessionPromise = supabase.auth.getSession()
-        const sessionTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 5000)
-        )
-
-        const {
-          data: { session },
-        } = await Promise.race([sessionPromise, sessionTimeout]) as any
+        const { data: { session } } = await supabase.auth.getSession()
 
         loadingTracker.endLoading('session-check')
         console.log("Current session:", session?.user?.email || "No user")
-        setUser(session?.user ? { id: session.user.id, email: session.user.email! } : null)
+        setUser(session?.user || null)
 
         // Listen for auth changes
         const {
           data: { subscription },
         } = supabase.auth.onAuthStateChange(async (_event, session) => {
           console.log("Auth state changed:", session?.user?.email || "No user")
-          const newUser = session?.user ? { id: session.user.id, email: session.user.email! } : null
-          setUser(newUser)
+          setUser(session?.user || null)
           
           // Handle redirect after authentication
-          if (newUser && redirectTo) {
+          if (session?.user && redirectTo) {
             console.log("Redirecting authenticated user to:", redirectTo)
             router.push(redirectTo)
           }
         })
 
-        // Clear loading timeout since we completed successfully
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current)
-          loadingTimeoutRef.current = null
-        }
-
         loadingTracker.endLoading('auth-init')
         setLoading(false)
-        setInitializationComplete(true)
         return () => subscription.unsubscribe()
       } catch (error) {
         console.error("Supabase initialization error:", error)
@@ -203,38 +174,11 @@ export default function Home() {
         setLoadingError(error instanceof Error ? error.message : 'Failed to initialize authentication')
         setSupabaseAvailable(false)
         setLoading(false)
-        setInitializationComplete(true)
       }
     }
 
     initializeAuth()
-
-    // Cleanup timeouts on unmount
-    return () => {
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current)
-      }
-      if (roleCheckTimeoutRef.current) {
-        clearTimeout(roleCheckTimeoutRef.current)
-      }
-    }
   }, [])
-
-  // Additional timeout for role checking
-  useEffect(() => {
-    if (user && mounted && !initializationComplete) {
-      roleCheckTimeoutRef.current = setTimeout(() => {
-        console.warn('Role check timeout, proceeding anyway')
-        setInitializationComplete(true)
-      }, ROLE_CHECK_TIMEOUT)
-    }
-
-    return () => {
-      if (roleCheckTimeoutRef.current) {
-        clearTimeout(roleCheckTimeoutRef.current)
-      }
-    }
-  }, [user, mounted, initializationComplete])
 
   const handleSignOut = async () => {
     const supabase = getSupabaseClient()
@@ -245,7 +189,7 @@ export default function Home() {
   }
 
   // Show loading with error handling and manual refresh option
-  if (loading || !mounted || !initializationComplete) {
+  if (roleLoading || !mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -257,7 +201,7 @@ export default function Home() {
               <Alert className="border-amber-200 bg-amber-50">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-amber-800">
-                  {loadingError}
+                  {loadingError || roleError}
                 </AlertDescription>
               </Alert>
               <Button 
@@ -307,7 +251,11 @@ export default function Home() {
             </p>
           </div>
         )}
-        <EnhancedAuthForm />
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="w-full max-w-md p-4">
+            <EnhancedAuthForm redirectTo={redirectTo || undefined} />
+          </div>
+        </div>
       </>
     )
   }
@@ -374,56 +322,62 @@ export default function Home() {
     )
   }
 
+  // Main authenticated view
   return (
-    <div
-      className={cn(
-        "grid min-h-screen w-full md:grid-cols-[3fr_1.5fr]",
-        isSidebarOpen && "md:grid-cols-[3fr_1.5fr]"
-      )}
-    >
-      <main className="flex flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
-          <RoleBasedHeader
-            userEmail={user.email}
+    <div className="flex h-screen w-full bg-white">
+      <main className="flex flex-col flex-1">
+        <header className="flex h-16 items-center border-b bg-gray-50 px-6">
+          <RoleBasedHeader 
+            user={user}
             onSignOut={handleSignOut}
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           />
         </header>
-        <div className="flex flex-1 flex-col gap-4 overflow-auto p-4 md:gap-8">
-          {currentDocument ? (
-            <TextEditor
-              key={currentDocument.id}
-              initialDocument={currentDocument}
-              onSave={(doc: Document) => setCurrentDocument(doc)}
-              onDelete={handleDeleteDocument}
-              onNew={handleNewDocument}
-              onSelect={setCurrentDocument}
-            />
-          ) : (
-            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed shadow-sm">
-              <div className="flex flex-col items-center gap-1 text-center">
-                <h3 className="text-2xl font-bold tracking-tight">
-                  No documents found
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Create your first document to get started.
-                </p>
-                <Button className="mt-4" onClick={handleNewDocument}>
-                  Create New Document
-                </Button>
-              </div>
-            </div>
-          )}
+        <div className="flex flex-1 overflow-hidden">
+          <div className="container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 md:grid-cols-[3fr_1.5fr]">
+            <main className="flex flex-col gap-4">
+              {currentDocument ? (
+                <TextEditor
+                  key={currentDocument.id}
+                  initialDocument={currentDocument}
+                  onSave={(doc: Document) => setCurrentDocument(doc)}
+                  onDelete={handleDeleteDocument}
+                  onNew={handleNewDocument}
+                  onSelect={setCurrentDocument}
+                />
+              ) : (
+                <div className="flex h-full min-h-[500px] items-center justify-center rounded-lg border border-dashed shadow-sm">
+                  <div className="flex flex-col items-center gap-1 text-center">
+                    <h3 className="text-2xl font-bold tracking-tight">
+                      No documents found
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Create your first document to get started.
+                    </p>
+                    <Button className="mt-4" onClick={handleNewDocument}>
+                      Create New Document
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </main>
+            <aside className="hidden md:block">
+              <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
+            </aside>
+          </div>
+          
+          {/* Mobile Sidebar */}
+          {isSidebarOpen && <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
+          <div
+            className={cn(
+              "fixed inset-y-0 right-0 z-50 w-full max-w-sm transform border-l bg-background transition-transform duration-300 ease-in-out md:hidden",
+              isSidebarOpen ? "translate-x-0" : "translate-x-full"
+            )}
+          >
+            <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
+          </div>
         </div>
       </main>
-      <div
-        className={cn(
-          "fixed inset-y-0 right-0 z-20 w-full max-w-sm transform border-l bg-background transition-transform duration-300 ease-in-out md:static md:z-auto md:w-auto md:max-w-none md:translate-x-0",
-          isSidebarOpen ? "translate-x-0" : "translate-x-full"
-        )}
-      >
-        <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
-      </div>
     </div>
   )
 }

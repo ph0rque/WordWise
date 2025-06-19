@@ -26,78 +26,32 @@ export function useUserRole(): UseUserRoleState {
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [retryCount, setRetryCount] = useState(0)
-  
-  // Refs for cleanup
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const refreshUserRole = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // Set up timeout for role fetching
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutRef.current = setTimeout(() => {
-          reject(new Error('Role fetch timeout'))
-        }, ROLE_FETCH_TIMEOUT)
-      })
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
 
-      const rolePromise = (async () => {
-        const supabase = getSupabaseClient()
-        const { data: { session } } = await supabase.auth.getSession()
-
-        if (!session?.user) {
-          setRole(null)
-          setIsAuthenticated(false)
-          return
-        }
-
-        setIsAuthenticated(true)
-        
-        // Get user role
-        const userRole = await getCurrentUserRole()
-        console.log('useUserRole: Retrieved role:', userRole)
-        setRole(userRole)
-      })()
-
-      // Race between role fetch and timeout
-      await Promise.race([rolePromise, timeoutPromise])
-      
-      // Clear timeout if we succeeded
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-        timeoutRef.current = null
+      if (!session?.user) {
+        setRole(null)
+        setIsAuthenticated(false)
+        return
       }
+
+      setIsAuthenticated(true)
       
-      // Reset retry count on success
-      setRetryCount(0)
+      // Get user role
+      const userRole = await getCurrentUserRole()
+      console.log('useUserRole: Retrieved role:', userRole)
+      setRole(userRole)
       
     } catch (err) {
       console.error('Error fetching user role:', err)
-      
-      // Clear timeout
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-        timeoutRef.current = null
-      }
-      
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user role'
       setError(errorMessage)
-      
-      // Implement retry logic for timeouts
-      if (errorMessage.includes('timeout') && retryCount < 2) {
-        console.log(`Role fetch timeout, retrying... (attempt ${retryCount + 1}/2)`)
-        setRetryCount(prev => prev + 1)
-        
-        retryTimeoutRef.current = setTimeout(() => {
-          refreshUserRole()
-        }, RETRY_DELAY)
-        return
-      }
-      
-      // If not a timeout or max retries reached, set role to null
       setRole(null)
     } finally {
       setLoading(false)
@@ -118,19 +72,12 @@ export function useUserRole(): UseUserRoleState {
         setIsAuthenticated(false)
         setError(null)
         setLoading(false)
-        setRetryCount(0)
       }
     })
 
     // Cleanup function
     return () => {
       subscription.unsubscribe()
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current)
-      }
     }
   }, [])
 

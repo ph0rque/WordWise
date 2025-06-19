@@ -15,6 +15,8 @@ import {
 import type { UserRole } from "@/lib/types"
 import { OnboardingConsent } from "@/components/auth/onboarding-consent"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 interface User {
   id: string
@@ -34,6 +36,8 @@ function SearchParamsHandler({ onMessage }: { onMessage: (message: string | null
 
 export default function RoleSetupPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>("student")
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
   const [loading, setLoading] = useState(false)
   const [initializing, setInitializing] = useState(true)
   const [message, setMessage] = useState<string | null>(null)
@@ -95,6 +99,10 @@ export default function RoleSetupPage() {
     }
 
     if (loading) return
+    if (!firstName || !lastName) {
+      setError("Please enter your first and last name.")
+      return
+    }
     if (selectedRole === "student" && !isConsented) return
 
     setLoading(true)
@@ -104,7 +112,8 @@ export default function RoleSetupPage() {
       // Use the new completeOnboarding function
       const { error: onboardingError } = await completeOnboarding(
         selectedRole,
-        selectedRole === "student" ? isConsented : false
+        selectedRole === "student" ? isConsented : false,
+        { firstName, lastName }
       )
 
       if (onboardingError) {
@@ -151,54 +160,73 @@ export default function RoleSetupPage() {
           <CardDescription>Complete your account setup</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6">
-            <Alert className="border-blue-200 bg-blue-50">
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertDescription className="text-blue-800">
-                Your email has been verified! Now choose your role to complete the setup.
-              </AlertDescription>
-            </Alert>
-          </div>
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Personal Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="first-name">First Name</Label>
+                  <Input
+                    id="first-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Jane"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="last-name">Last Name</Label>
+                  <Input
+                    id="last-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Doe"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
 
-          <RoleSelector
-            selectedRole={selectedRole}
-            onRoleChange={setSelectedRole}
-            onConfirm={handleCompleteRoleSetup}
-            showConfirmButton={false}
-          />
-
-          {selectedRole === "student" && (
-            <OnboardingConsent
-              isConsented={isConsented}
-              onConsentChange={setIsConsented}
+            <RoleSelector
+              selectedRole={selectedRole}
+              onRoleChange={setSelectedRole}
+              onConfirm={handleCompleteRoleSetup}
+              showConfirmButton={false}
             />
-          )}
 
-          <div className="mt-6 flex justify-end">
-            <Button
-              onClick={handleCompleteRoleSetup}
-              disabled={loading || (selectedRole === "student" && !isConsented)}
-            >
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Complete Setup
-            </Button>
+            {selectedRole === "student" && (
+              <OnboardingConsent
+                isConsented={isConsented}
+                onConsentChange={setIsConsented}
+              />
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleCompleteRoleSetup}
+                disabled={loading || (selectedRole === "student" && !isConsented) || !firstName || !lastName}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Complete Setup
+              </Button>
+            </div>
+            
+            {error && (
+              <Alert className="mt-4 border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-red-800">{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {message && (
+              <Alert className="mt-4 border-green-200 bg-green-50">
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription className="text-green-800">{message}</AlertDescription>
+              </Alert>
+            )}
           </div>
-          
-          {error && (
-            <Alert className="mt-4 border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-red-800">{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {message && (
-            <Alert className="mt-4 border-green-200 bg-green-50">
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertDescription className="text-green-800">{message}</AlertDescription>
-            </Alert>
-          )}
         </CardContent>
       </Card>
     </div>

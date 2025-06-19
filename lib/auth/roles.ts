@@ -41,13 +41,7 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
   try {
     const supabase = getSupabaseClient()
     
-    // Add timeout to prevent hanging
-    const userPromise = supabase.auth.getUser()
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('User fetch timeout')), 5000)
-    })
-    
-    const { data: { user }, error: authError } = await Promise.race([userPromise, timeoutPromise]) as any
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       console.error('Error getting authenticated user:', authError)
       return null
@@ -244,35 +238,42 @@ export async function updateUserRole(
  */
 export async function completeOnboarding(
   role: UserRole,
-  hasConsented: boolean
+  hasConsented: boolean,
+  name: { firstName: string; lastName: string }
 ): Promise<{ user: User | null; error: any }> {
   try {
     const supabase = getSupabaseClient()
-    const { data, error } = await supabase.auth.updateUser({
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.updateUser({
       data: {
-        role: role,
+        role,
         has_consented_to_keystrokes: hasConsented,
+        first_name: name.firstName,
+        last_name: name.lastName,
       },
     })
 
-    if (error) {
-      console.error("Error completing onboarding:", error)
-      return { user: null, error }
+    if (userError) {
+      console.error('Error completing onboarding:', userError)
+      return { user: null, error: userError }
+    }
+
+    if (!user) {
+      return { user: null, error: 'No user returned after update.' }
     }
 
     // Adapt Supabase user to our local User type
-    if (data.user) {
-      const adaptedUser: User = {
-        id: data.user.id,
-        email: data.user.email || "", // Ensure email is always a string
-      }
-      return { user: adaptedUser, error: null }
+    const adaptedUser: User = {
+      id: user.id,
+      email: user.email || '', // Ensure email is always a string
     }
 
-    return { user: null, error }
-  } catch (error) {
-    console.error("Unexpected error in completeOnboarding:", error)
-    return { user: null, error }
+    return { user: adaptedUser, error: null }
+  } catch (err) {
+    console.error('Unexpected error in completeOnboarding:', err)
+    return { user: null, error: err }
   }
 }
 
