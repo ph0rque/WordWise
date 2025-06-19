@@ -24,20 +24,8 @@ export async function GET(request: NextRequest) {
       try {
         // Check if user has a role assigned in metadata
         const userRole = data.user.user_metadata?.role || data.user.app_metadata?.role
-        const pendingRole = data.user.user_metadata?.pending_role
 
-        console.log('Auth callback - User role:', userRole, 'Pending role:', pendingRole)
-
-        // If user has pending role data from signup but no assigned role, redirect to assign it
-        if (!userRole && pendingRole) {
-          // For students, redirect directly to role setup to complete onboarding seamlessly
-          // For admins, still use the assign-role page for additional verification
-          if (pendingRole === 'student') {
-            return NextResponse.redirect(`${redirectUrl}/auth/role-setup?pending_role=${pendingRole}&auto_assign=true`)
-          } else {
-            return NextResponse.redirect(`${redirectUrl}/auth/assign-role?pending_role=${pendingRole}`)
-          }
-        }
+        console.log('Auth callback - User role:', userRole)
 
         // If user has an assigned role, redirect appropriately
         if (userRole) {
@@ -49,8 +37,8 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // If step is role-selection or user has no role, redirect to auth with role selection
-        if (step === 'role-selection' || (!userRole && !pendingRole)) {
+        // If user has no role, redirect to role setup
+        if (!userRole) {
           return NextResponse.redirect(`${redirectUrl}/auth/role-setup?user_id=${data.user.id}`)
         }
 

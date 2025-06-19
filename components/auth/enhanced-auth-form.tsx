@@ -86,11 +86,12 @@ export function EnhancedAuthForm() {
         email,
         password,
         options: {
-          emailRedirectTo: `${siteUrl}/auth/callback?step=role-selection`,
+          emailRedirectTo: `${siteUrl}/auth/callback`,
           data: {
-            // We'll store the selected role temporarily, but won't set it until email is confirmed
-            pending_role: selectedRole,
-            display_name: displayName
+            // Directly assign the role and other data
+            role: selectedRole,
+            display_name: displayName,
+            has_consented_to_keystrokes: selectedRole === 'student' // Auto-consent students
           }
         },
       })
@@ -102,9 +103,14 @@ export function EnhancedAuthForm() {
         setMessage(`Check your email for the confirmation link! Make sure to check your spam folder. Your ${selectedRole} account will be activated after email verification.`)
         setAuthStep('complete')
       } else if (data.user && data.session) {
-        // No email confirmation required (immediate signup)
-        setPendingUserId(data.user.id)
-        setAuthStep('role-selection')
+        // No email confirmation required (immediate signup) - redirect directly
+        setMessage(`Welcome! Your ${selectedRole} account has been set up successfully.`)
+        setAuthStep('complete')
+        
+        // Redirect after a brief delay
+        setTimeout(() => {
+          handleRoleBasedRedirect(selectedRole)
+        }, 2000)
       }
     } catch (err) {
       setError("Supabase configuration error. Please check your environment variables.")

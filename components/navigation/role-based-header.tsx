@@ -76,8 +76,7 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
   }
 
   const handleSettings = () => {
-    // Navigate to settings page (to be implemented)
-    console.log('Navigate to settings')
+    router.push('/settings')
   }
 
   const displayName = user?.user_metadata?.display_name
