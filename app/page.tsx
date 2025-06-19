@@ -20,14 +20,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
-import { loadingTracker } from "@/lib/utils"
 import { RightSidebar } from "@/components/sidebar/right-sidebar"
 import { checkAIAvailability } from "@/lib/client-grammar-checker"
 import { cn } from "@/lib/utils"
-
-// Loading timeout configuration
-const LOADING_TIMEOUT = 10000 // 10 seconds
-const ROLE_CHECK_TIMEOUT = 5000 // 5 seconds
 
 function SearchParamsHandler({ onRedirectTo }: { onRedirectTo: (redirectTo: string | null) => void }) {
   const searchParams = useSearchParams()
@@ -60,10 +55,6 @@ export default function Page() {
   const [suggestionsPanelProps, setSuggestionsPanelProps] = useState<any>({})
   const [mounted, setMounted] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-
-  // Timeout refs for cleanup
-  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const roleCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Role-based features - only use after component mounts to avoid hydration issues
   const roleFeatures = useRoleBasedFeatures()
@@ -126,13 +117,9 @@ export default function Page() {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Start tracking initialization
-        loadingTracker.startLoading('auth-init', 'Initializing authentication')
-
         // Check if Supabase is configured
         if (!isSupabaseConfigured()) {
           console.log("Supabase not configured, showing demo mode")
-          loadingTracker.endLoading('auth-init')
           setSupabaseAvailable(false)
           setLoading(false)
           return
@@ -143,10 +130,7 @@ export default function Page() {
         console.log("Supabase configured, initializing auth...")
 
         // Get initial session
-        loadingTracker.startLoading('session-check', 'Checking user session')
         const { data: { session } } = await supabase.auth.getSession()
-
-        loadingTracker.endLoading('session-check')
         console.log("Current session:", session?.user?.email || "No user")
         setUser(session?.user || null)
 
@@ -164,13 +148,10 @@ export default function Page() {
           }
         })
 
-        loadingTracker.endLoading('auth-init')
         setLoading(false)
         return () => subscription.unsubscribe()
       } catch (error) {
         console.error("Supabase initialization error:", error)
-        loadingTracker.failLoading('auth-init', error instanceof Error ? error.message : 'Unknown error')
-        loadingTracker.failLoading('session-check', 'Auth initialization failed')
         setLoadingError(error instanceof Error ? error.message : 'Failed to initialize authentication')
         setSupabaseAvailable(false)
         setLoading(false)
@@ -189,7 +170,7 @@ export default function Page() {
   }
 
   // Show loading with error handling and manual refresh option
-  if (roleLoading || !mounted) {
+  if (loading || roleLoading || !mounted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -240,7 +221,8 @@ export default function Page() {
     return <DemoEditor />
   }
 
-  if (!user) {
+  // If not authenticated, show auth form
+  if (!roleBasedAuth) {
     console.log("No user, showing auth form")
     return (
       <>
@@ -253,7 +235,7 @@ export default function Page() {
         )}
         <div className="flex min-h-screen items-center justify-center">
           <div className="w-full max-w-md p-4">
-            <EnhancedAuthForm redirectTo={redirectTo || undefined} />
+            <EnhancedAuthForm />
           </div>
         </div>
       </>
@@ -263,10 +245,13 @@ export default function Page() {
   console.log("User authenticated, showing main app")
 
   // Show role setup prompt if user has no role
-  if (user && showUpgradePrompts) {
+  if (showUpgradePrompts) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <RoleBasedHeader userEmail={user.email} onSignOut={handleSignOut} />
+        <RoleBasedHeader 
+          user={user}
+          onSignOut={handleSignOut}
+        />
         <div className="container max-w-4xl mx-auto px-4 py-8">
           <div className="text-center space-y-6">
             <div className="p-8 bg-white rounded-lg shadow-sm border">
@@ -292,7 +277,10 @@ export default function Page() {
   if (showAdminNavigation && currentRole === 'admin') {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <RoleBasedHeader userEmail={user.email} onSignOut={handleSignOut} />
+        <RoleBasedHeader 
+          user={user}
+          onSignOut={handleSignOut}
+        />
         <div className="container max-w-4xl mx-auto px-4 py-8">
           <div className="text-center space-y-6">
             <Alert>

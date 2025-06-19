@@ -89,7 +89,15 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
   return (
     <div className="contents">
       <div className="flex flex-1 items-center gap-4">
-        <h1 className="text-xl font-bold text-gray-900">WordWise AI</h1>
+        <div className="p-2 bg-emerald-100 rounded-lg">
+          <GraduationCap className="h-6 w-6 text-emerald-600" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">WordWise AI</h1>
+          <p className="text-xs text-gray-500">
+            Write with confidence. Edit with intelligence.
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-4">
         {firstName && (
