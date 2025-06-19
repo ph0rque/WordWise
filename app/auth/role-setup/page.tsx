@@ -7,8 +7,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { RoleSelector } from "@/components/auth/role-selector"
-import { getCurrentUserRole, updateUserRole } from "@/lib/auth/roles"
+import {
+  getCurrentUserRole,
+  updateUserRole,
+  completeOnboarding,
+} from "@/lib/auth/roles"
 import type { UserRole } from "@/lib/types"
+import { OnboardingConsent } from "@/components/auth/onboarding-consent"
+import { Button } from "@/components/ui/button"
 
 interface User {
   id: string
@@ -33,6 +39,7 @@ export default function RoleSetupPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [userId, setUserId] = useState<string | null>(null)
+  const [isConsented, setIsConsented] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -87,12 +94,22 @@ export default function RoleSetupPage() {
       return
     }
 
+    if (loading) return
+    if (selectedRole === "student" && !isConsented) return
+
     setLoading(true)
     setError("")
 
     try {
-      // Use the updateUserRole function from our auth helpers
-      await updateUserRole(userId, selectedRole)
+      // Use the new completeOnboarding function
+      const { error: onboardingError } = await completeOnboarding(
+        selectedRole,
+        selectedRole === "student" ? isConsented : false
+      )
+
+      if (onboardingError) {
+        throw onboardingError
+      }
       
       setMessage(`Welcome! Your ${selectedRole} account has been set up successfully.`)
       
@@ -147,8 +164,27 @@ export default function RoleSetupPage() {
             selectedRole={selectedRole}
             onRoleChange={setSelectedRole}
             onConfirm={handleCompleteRoleSetup}
-            showConfirmButton={true}
+            showConfirmButton={false}
           />
+
+          {selectedRole === "student" && (
+            <OnboardingConsent
+              isConsented={isConsented}
+              onConsentChange={setIsConsented}
+            />
+          )}
+
+          <div className="mt-6 flex justify-end">
+            <Button
+              onClick={handleCompleteRoleSetup}
+              disabled={loading || (selectedRole === "student" && !isConsented)}
+            >
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Complete Setup
+            </Button>
+          </div>
           
           {error && (
             <Alert className="mt-4 border-red-200 bg-red-50">
@@ -162,13 +198,6 @@ export default function RoleSetupPage() {
               <CheckCircle2 className="h-4 w-4" />
               <AlertDescription className="text-green-800">{message}</AlertDescription>
             </Alert>
-          )}
-
-          {loading && (
-            <div className="mt-4 flex items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-emerald-600 mr-2" />
-              <span className="text-gray-600">Setting up your account...</span>
-            </div>
           )}
         </CardContent>
       </Card>

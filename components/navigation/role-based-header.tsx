@@ -17,17 +17,20 @@ import {
   GraduationCap, 
   BarChart3, 
   Users,
-  FileText
+  FileText,
+  PanelRight
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { getSupabaseClient } from "@/lib/supabase/client"
+import { Badge } from "@/components/ui/badge"
 
 interface RoleBasedHeaderProps {
   userEmail?: string
   onSignOut?: () => void
+  onToggleSidebar?: () => void
 }
 
-export function RoleBasedHeader({ userEmail, onSignOut }: RoleBasedHeaderProps) {
+export function RoleBasedHeader({ userEmail, onSignOut, onToggleSidebar }: RoleBasedHeaderProps) {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   
@@ -87,12 +90,12 @@ export function RoleBasedHeader({ userEmail, onSignOut }: RoleBasedHeaderProps) 
         <div className="p-2 bg-emerald-100 rounded-lg">
           <GraduationCap className="h-6 w-6 text-emerald-600" />
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">WordWise</h1>
-          <p className="text-sm text-gray-600">
-            {currentRole === 'admin' ? 'Admin Dashboard' : 'Academic Writing Assistant'}
-          </p>
-        </div>
+        <h1 className="text-xl font-bold text-gray-900">WordWise</h1>
+        {currentRole === "student" && (
+          <Badge variant="outline" className="font-medium">
+            Academic
+          </Badge>
+        )}
       </div>
 
       {/* Navigation Links */}
@@ -125,26 +128,12 @@ export function RoleBasedHeader({ userEmail, onSignOut }: RoleBasedHeaderProps) 
           </>
         )}
 
-        {showStudentTools && (
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/')}
-              className="flex items-center space-x-2"
-            >
-              <FileText className="h-4 w-4" />
-              <span>Editor</span>
-            </Button>
-          </div>
-        )}
-
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center space-x-2">
-              <User className="h-4 w-4" />
-              <span className="hidden md:inline">{userEmail}</span>
+            <Button variant="ghost" size="icon" className="rounded-full">
+              <User className="h-5 w-5" />
+              <span className="sr-only">Toggle user menu</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -184,6 +173,17 @@ export function RoleBasedHeader({ userEmail, onSignOut }: RoleBasedHeaderProps) 
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        {onToggleSidebar && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleSidebar}
+            className="md:hidden"
+          >
+            <PanelRight className="h-5 w-5" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -195,12 +195,10 @@ export function RoleBasedNotifications() {
   
   const roleFeatures = useRoleBasedFeatures()
   const { 
-    showKeystrokeNotice, 
     showUpgradePrompts, 
     currentRole, 
     isAuthenticated 
   } = mounted ? roleFeatures : {
-    showKeystrokeNotice: false,
     showUpgradePrompts: false,
     currentRole: null,
     isAuthenticated: false,
@@ -214,23 +212,6 @@ export function RoleBasedNotifications() {
 
   return (
     <div className="space-y-2">
-      {showKeystrokeNotice && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="flex items-start space-x-2">
-            <GraduationCap className="h-5 w-5 text-blue-600 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-medium text-blue-900">
-                Keystroke Recording Active
-              </h4>
-              <p className="text-sm text-blue-700 mt-1">
-                Your typing activity is being recorded to help improve your writing skills. 
-                This data is securely stored and only accessible to your teachers.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showUpgradePrompts && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
           <div className="flex items-start space-x-2">

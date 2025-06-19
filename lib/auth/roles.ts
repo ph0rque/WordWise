@@ -237,6 +237,46 @@ export async function updateUserRole(
 }
 
 /**
+ * Allows the current user to complete their own onboarding by setting their role and consent.
+ * This should only be called during the initial setup flow.
+ * @param role - The role to assign to the current user.
+ * @param hasConsented - The keystroke recording consent status.
+ */
+export async function completeOnboarding(
+  role: UserRole,
+  hasConsented: boolean
+): Promise<{ user: User | null; error: any }> {
+  try {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        role: role,
+        has_consented_to_keystrokes: hasConsented,
+      },
+    })
+
+    if (error) {
+      console.error("Error completing onboarding:", error)
+      return { user: null, error }
+    }
+
+    // Adapt Supabase user to our local User type
+    if (data.user) {
+      const adaptedUser: User = {
+        id: data.user.id,
+        email: data.user.email || "", // Ensure email is always a string
+      }
+      return { user: adaptedUser, error: null }
+    }
+
+    return { user: null, error }
+  } catch (error) {
+    console.error("Unexpected error in completeOnboarding:", error)
+    return { user: null, error }
+  }
+}
+
+/**
  * Get all users with their roles (admin only)
  * Note: In production, this requires admin API access or custom database views
  * @returns Promise<UserWithRole[]> - Array of users with role information

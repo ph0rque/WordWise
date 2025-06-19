@@ -82,12 +82,9 @@
   - Writing goals and progress tracking
   - Collaboration features (shared documents)
 
-- **UI/UX Improvements**:
-  - Enhanced mobile experience
-  - Keyboard shortcuts and power-user features
-  - Customizable interface layouts
-  - Better suggestion visualization
-  - Real-time collaboration indicators
+- **Student-Focused UI/UX Overhaul**:
+  - Implement the comprehensive redesign for student users.
+  - See the full plan at `memory-bank/ui-ux-improvement-prd.md`.
 
 ### Long-term (3+ months)
 - **AI Enhancements**:

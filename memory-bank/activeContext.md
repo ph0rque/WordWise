@@ -89,11 +89,10 @@ Current implementation may make too many API calls:
    - Advanced text statistics
    - Writing goals and tracking
 
-3. **UI/UX Improvements**:
-   - Better mobile responsiveness
-   - Keyboard shortcuts
-   - Improved accessibility
-   - Enhanced theming options
+3. **Major UI/UX Overhaul for Students**:
+   - Implement the comprehensive redesign outlined in the UI/UX Improvement PRD.
+   - **Reference**: `memory-bank/ui-ux-improvement-prd.md`
+   - Key goals include header simplification, sidebar consolidation, and a distraction-free writing environment.
 
 ## Key Decisions Needed
 

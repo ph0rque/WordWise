@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { TextEditor, SuggestionsPanel, useSuggestionsPanelProps } from "@/components/text-editor"
+import { TextEditor } from "@/components/text-editor"
 import { EnhancedAuthForm } from "@/components/auth/enhanced-auth-form"
 import { DemoEditor } from "@/components/demo-editor"
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client"
@@ -12,7 +12,7 @@ import { RoleBasedHeader, RoleBasedNotifications } from "@/components/navigation
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { GraduationCap, AlertCircle, RefreshCw } from "lucide-react"
+import { GraduationCap, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -20,6 +20,9 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
 import { loadingTracker } from "@/lib/utils"
+import { RightSidebar } from "@/components/sidebar/right-sidebar"
+import { checkAIAvailability } from "@/lib/client-grammar-checker"
+import { cn } from "@/lib/utils"
 
 // Loading timeout configuration
 const LOADING_TIMEOUT = 10000 // 10 seconds
@@ -56,6 +59,7 @@ export default function Home() {
   const [suggestionsPanelProps, setSuggestionsPanelProps] = useState<any>({})
   const [mounted, setMounted] = useState(false)
   const [initializationComplete, setInitializationComplete] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   // Timeout refs for cleanup
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -85,9 +89,29 @@ export default function Home() {
     setCurrentDocument(doc)
   }
 
-  const handleNewDocument = (doc: Document) => {
-    setCurrentDocument(doc)
-    refreshDocuments()
+  const handleNewDocument = async () => {
+    const supabase = getSupabaseClient()
+    const { data, error } = await supabase
+      .from("documents")
+      .insert({ title: "Untitled Document", content: "" })
+      .select()
+      .single()
+    if (data) {
+      setCurrentDocument(data)
+    }
+  }
+
+  const handleDeleteDocument = async (documentId: string) => {
+    const supabase = getSupabaseClient()
+    await supabase.from("documents").delete().eq("id", documentId)
+    // After deletion, fetch the most recent document
+    const { data } = await supabase
+      .from("documents")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .single()
+    setCurrentDocument(data || null)
   }
 
   // Force reload function for stuck states
@@ -98,6 +122,10 @@ export default function Home() {
   // Set mounted state to avoid hydration issues
   useEffect(() => {
     setMounted(true)
+    const checkAI = async () => {
+      setAiAvailable(await checkAIAvailability())
+    }
+    checkAI()
   }, [])
 
   useEffect(() => {
@@ -209,13 +237,11 @@ export default function Home() {
   }, [user, mounted, initializationComplete])
 
   const handleSignOut = async () => {
-    try {
-      const supabase = getSupabaseClient()
-      await supabase.auth.signOut()
-      console.log("User signed out")
-    } catch (error) {
-      console.error("Sign out error:", error)
-    }
+    const supabase = getSupabaseClient()
+    await supabase.auth.signOut()
+    setUser(null)
+    setCurrentDocument(null)
+    router.push("/")
   }
 
   // Show loading with error handling and manual refresh option
@@ -349,69 +375,55 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* Search params handler in Suspense boundary */}
-      <Suspense fallback={null}>
-        <SearchParamsHandler onRedirectTo={setRedirectTo} />
-      </Suspense>
-      
-      {/* Role-based header */}
-      <RoleBasedHeader userEmail={user.email} onSignOut={handleSignOut} />
-      
-      <div className="container max-w-7xl px-4 py-8 mx-auto">
-        {/* Role-based notifications */}
-        <div className="mb-6">
-          <RoleBasedNotifications />
-        </div>
-
-        {/* Check if user has permissions for main features */}
-        {!canCreateDocuments || !canUseGrammarChecker ? (
-          <div className="text-center py-12">
-            <Alert className="max-w-md mx-auto">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                You don't have permission to access the text editor. 
-                Please contact your administrator for assistance.
-              </AlertDescription>
-            </Alert>
-          </div>
-        ) : (
-          <div className="flex flex-row items-start gap-8">
-            {/* Main editor area */}
-            <div className="basis-2/3 min-w-0">
-              <TextEditor
-                user={user}
-                onSignOut={handleSignOut}
-                refreshDocuments={refreshDocuments}
-                currentDocument={currentDocument}
-                setCurrentDocument={setCurrentDocument}
-                onSuggestionsPanelPropsChange={setSuggestionsPanelProps}
-              />
-            </div>
-            {/* Sidebar area */}
-            <div className="basis-1/3 flex flex-col items-stretch">
-              {/* Suggestions and My Documents stacked */}
-              <div className="space-y-6">
-                {canUseGrammarChecker && (
-                  <SuggestionsPanel {...suggestionsPanelProps} />
-                )}
-                {canCreateDocuments && (
-                  <DocumentManager
-                    onSelectDocument={handleSelectDocument}
-                    onNewDocument={handleNewDocument}
-                    currentDocumentId={currentDocument?.id}
-                    refreshDocumentsFlag={refreshDocumentsFlag}
-                  />
-                )}
+    <div
+      className={cn(
+        "grid min-h-screen w-full md:grid-cols-[3fr_1.5fr]",
+        isSidebarOpen && "md:grid-cols-[3fr_1.5fr]"
+      )}
+    >
+      <main className="flex flex-col">
+        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
+          <RoleBasedHeader
+            userEmail={user.email}
+            onSignOut={handleSignOut}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          />
+        </header>
+        <div className="flex flex-1 flex-col gap-4 overflow-auto p-4 md:gap-8">
+          {currentDocument ? (
+            <TextEditor
+              key={currentDocument.id}
+              initialDocument={currentDocument}
+              onSave={(doc: Document) => setCurrentDocument(doc)}
+              onDelete={handleDeleteDocument}
+              onNew={handleNewDocument}
+              onSelect={setCurrentDocument}
+            />
+          ) : (
+            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed shadow-sm">
+              <div className="flex flex-col items-center gap-1 text-center">
+                <h3 className="text-2xl font-bold tracking-tight">
+                  No documents found
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Create your first document to get started.
+                </p>
+                <Button className="mt-4" onClick={handleNewDocument}>
+                  Create New Document
+                </Button>
               </div>
             </div>
-          </div>
+          )}
+        </div>
+      </main>
+      <div
+        className={cn(
+          "fixed inset-y-0 right-0 z-20 w-full max-w-sm transform border-l bg-background transition-transform duration-300 ease-in-out md:static md:z-auto md:w-auto md:max-w-none md:translate-x-0",
+          isSidebarOpen ? "translate-x-0" : "translate-x-full"
         )}
-        
-        <footer className="mt-16 text-center text-sm text-slate-500">
-          <p>© 2025 WordWise. An AI-powered academic writing assistant for high school students.</p>
-        </footer>
+      >
+        <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
       </div>
-    </main>
+    </div>
   )
 }
