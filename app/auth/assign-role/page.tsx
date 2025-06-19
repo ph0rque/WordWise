@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,10 +9,20 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, CheckCircle2, AlertCircle, GraduationCap } from 'lucide-react'
 import type { UserRole } from '@/lib/types'
 
+function SearchParamsHandler({ onRole }: { onRole: (role: string | null) => void }) {
+  const searchParams = useSearchParams()
+  const role = searchParams.get('role')
+  
+  useEffect(() => {
+    onRole(role)
+  }, [role, onRole])
+  
+  return null
+}
+
 export default function AssignRolePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const pendingRole = searchParams.get('pending_role') as UserRole
+  const [pendingRole, setPendingRole] = useState<string | null>(null)
   
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState(false)
@@ -103,6 +113,9 @@ export default function AssignRolePage() {
   if (loading || assigning) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
+        <Suspense fallback={null}>
+          <SearchParamsHandler onRole={setPendingRole} />
+        </Suspense>
         <Card className="w-full max-w-md">
           <CardContent className="flex flex-col items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mb-4" />
@@ -121,6 +134,9 @@ export default function AssignRolePage() {
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
+        <Suspense fallback={null}>
+          <SearchParamsHandler onRole={setPendingRole} />
+        </Suspense>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-emerald-600">WordWise</CardTitle>
@@ -146,6 +162,9 @@ export default function AssignRolePage() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
+        <Suspense fallback={null}>
+          <SearchParamsHandler onRole={setPendingRole} />
+        </Suspense>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-emerald-600">WordWise</CardTitle>

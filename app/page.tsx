@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { TextEditor, SuggestionsPanel, useSuggestionsPanelProps } from "@/components/text-editor"
 import { EnhancedAuthForm } from "@/components/auth/enhanced-auth-form"
@@ -25,10 +25,20 @@ import { loadingTracker } from "@/lib/utils"
 const LOADING_TIMEOUT = 10000 // 10 seconds
 const ROLE_CHECK_TIMEOUT = 5000 // 5 seconds
 
-export default function Home() {
-  const router = useRouter()
+function SearchParamsHandler({ onRedirectTo }: { onRedirectTo: (redirectTo: string | null) => void }) {
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo')
+  
+  useEffect(() => {
+    onRedirectTo(redirectTo)
+  }, [redirectTo, onRedirectTo])
+  
+  return null
+}
+
+export default function Home() {
+  const router = useRouter()
+  const [redirectTo, setRedirectTo] = useState<string | null>(null)
   
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -340,6 +350,11 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      {/* Search params handler in Suspense boundary */}
+      <Suspense fallback={null}>
+        <SearchParamsHandler onRedirectTo={setRedirectTo} />
+      </Suspense>
+      
       {/* Role-based header */}
       <RoleBasedHeader userEmail={user.email} onSignOut={handleSignOut} />
       

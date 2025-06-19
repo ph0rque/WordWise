@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -10,15 +10,30 @@ import { RoleSelector } from "@/components/auth/role-selector"
 import { getCurrentUserRole, updateUserRole } from "@/lib/auth/roles"
 import type { UserRole } from "@/lib/types"
 
+interface User {
+  id: string
+  email: string
+}
+
+function SearchParamsHandler({ onMessage }: { onMessage: (message: string | null) => void }) {
+  const searchParams = useSearchParams()
+  const message = searchParams.get('message')
+  
+  useEffect(() => {
+    onMessage(message)
+  }, [message, onMessage])
+  
+  return null
+}
+
 export default function RoleSetupPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>("student")
   const [loading, setLoading] = useState(false)
   const [initializing, setInitializing] = useState(true)
-  const [message, setMessage] = useState("")
+  const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [userId, setUserId] = useState<string | null>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   useEffect(() => {
     const initializeRoleSetup = async () => {
@@ -108,6 +123,11 @@ export default function RoleSetupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
+      {/* Search params handler in Suspense boundary */}
+      <Suspense fallback={null}>
+        <SearchParamsHandler onMessage={setMessage} />
+      </Suspense>
+      
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl text-emerald-600">WordWise</CardTitle>
