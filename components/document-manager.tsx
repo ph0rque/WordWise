@@ -93,7 +93,32 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
   const fetchDocuments = async () => {
     try {
       const supabase = getSupabaseClient()
-      const { data, error } = await supabase.from("documents").select("*").order("updated_at", { ascending: false })
+      
+      // Get current user first
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      
+      if (userError) {
+        console.error("Error getting user for document fetch:", userError)
+        setError(`Authentication error: ${userError.message}`)
+        setLoading(false)
+        return
+      }
+
+      if (!userData.user) {
+        console.error("No authenticated user found when fetching documents")
+        setError("No authenticated user found. Please sign in again.")
+        setLoading(false)
+        return
+      }
+
+      console.log("Fetching documents for user:", userData.user.id)
+
+      // Fetch documents with explicit user filtering (in addition to RLS)
+      const { data, error } = await supabase
+        .from("documents")
+        .select("*")
+        .eq("user_id", userData.user.id)
+        .order("updated_at", { ascending: false })
 
       if (error) {
         console.error("Error fetching documents:", error)
@@ -106,6 +131,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
           setError(`Failed to load documents: ${error.message}`)
         }
       } else {
+        console.log(`Fetched ${data?.length || 0} documents for user ${userData.user.id}`)
         setDocuments(data || [])
         setError("")
         setNeedsSetup(false)

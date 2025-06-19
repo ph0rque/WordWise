@@ -77,26 +77,63 @@ export default function Page() {
 
   const handleNewDocument = async () => {
     const supabase = getSupabaseClient()
+    
+    // Get current user
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !userData.user) {
+      console.error("Error getting user for new document:", userError)
+      return
+    }
+
+    console.log("Creating new document for user:", userData.user.id)
+    
     const { data, error } = await supabase
       .from("documents")
-      .insert({ title: "Untitled Document", content: "" })
+      .insert({ 
+        title: "Untitled Document", 
+        content: "",
+        user_id: userData.user.id
+      })
       .select()
       .single()
-    if (data) {
+      
+    if (error) {
+      console.error("Error creating new document:", error)
+    } else if (data) {
+      console.log("New document created:", data)
       setCurrentDocument(data)
     }
   }
 
   const handleDeleteDocument = async (documentId: string) => {
     const supabase = getSupabaseClient()
-    await supabase.from("documents").delete().eq("id", documentId)
-    // After deletion, fetch the most recent document
+    
+    // Get current user
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !userData.user) {
+      console.error("Error getting user for document deletion:", userError)
+      return
+    }
+
+    console.log("Deleting document for user:", userData.user.id)
+    
+    await supabase
+      .from("documents")
+      .delete()
+      .eq("id", documentId)
+      .eq("user_id", userData.user.id) // Ensure user can only delete their own documents
+      
+    // After deletion, fetch the most recent document for this user
     const { data } = await supabase
       .from("documents")
       .select("*")
+      .eq("user_id", userData.user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
       .single()
+      
     setCurrentDocument(data || null)
   }
 

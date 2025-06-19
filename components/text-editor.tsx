@@ -45,23 +45,38 @@ export function TextEditor({
 
   const debouncedSave = useDebouncedCallback(async (newTitle: string, newContent: string) => {
     setIsSaving(true)
+    try {
       const supabase = getSupabaseClient()
+      
+      // Get current user for security
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !userData.user) {
+        console.error("Error getting user for document save:", userError)
+        setIsSaving(false)
+        return
+      }
+
       const { data, error } = await supabase
         .from("documents")
         .update({
-        title: newTitle,
-        content: newContent,
-        updated_at: new Date().toISOString(),
+          title: newTitle,
+          content: newContent,
+          updated_at: new Date().toISOString(),
         })
-      .eq("id", initialDocument.id)
+        .eq("id", initialDocument.id)
+        .eq("user_id", userData.user.id) // Ensure user can only update their own documents
         .select()
         .single()
 
       if (error) {
         console.error("Error saving document:", error)
-      // Handle error
-    } else if (data) {
-      onSave(data)
+        // Handle error
+      } else if (data) {
+        onSave(data)
+      }
+    } catch (error) {
+      console.error("Error in debouncedSave:", error)
     }
     setIsSaving(false)
   }, 1500)
