@@ -456,6 +456,9 @@ export function RecordingControls({
       {/* Consent Dialog */}
       <Dialog open={showConsentDialog} onOpenChange={setShowConsentDialog}>
         <DialogContent className="max-w-none w-[95vw] max-h-[95vh] p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Keystroke Recording Consent</DialogTitle>
+          </DialogHeader>
           <ConsentNotice
             isVisible={showConsentDialog}
             onConsent={handleConsentGiven}
