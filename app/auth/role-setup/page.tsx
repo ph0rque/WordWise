@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle2, AlertCircle } from "lucide-react"
+import { Loader2, CheckCircle2, AlertCircle, GraduationCap } from "lucide-react"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { RoleSelector } from "@/components/auth/role-selector"
 import {
@@ -23,13 +23,26 @@ interface User {
   email: string
 }
 
-function SearchParamsHandler({ onMessage }: { onMessage: (message: string | null) => void }) {
+function SearchParamsHandler({ 
+  onMessage,
+  onPendingRole, 
+  onAutoAssign 
+}: { 
+  onMessage: (message: string | null) => void
+  onPendingRole: (role: string | null) => void
+  onAutoAssign: (autoAssign: boolean) => void
+}) {
   const searchParams = useSearchParams()
-  const message = searchParams.get('message')
   
   useEffect(() => {
+    const message = searchParams.get('message')
+    const pendingRole = searchParams.get('pending_role')
+    const autoAssign = searchParams.get('auto_assign') === 'true'
+    
     onMessage(message)
-  }, [message, onMessage])
+    onPendingRole(pendingRole)
+    onAutoAssign(autoAssign)
+  }, [searchParams, onMessage, onPendingRole, onAutoAssign])
   
   return null
 }
@@ -44,6 +57,8 @@ export default function RoleSetupPage() {
   const [error, setError] = useState("")
   const [userId, setUserId] = useState<string | null>(null)
   const [isConsented, setIsConsented] = useState(false)
+  const [autoAssign, setAutoAssign] = useState(false)
+  const [pendingRole, setPendingRole] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -68,12 +83,28 @@ export default function RoleSetupPage() {
           return
         }
 
-        // Check if there's a pending role from user metadata
-        if (session.user.user_metadata?.pending_role) {
-          setSelectedRole(session.user.user_metadata.pending_role)
+        // Check if there's a pending role from user metadata or URL params
+        const userPendingRole = session.user.user_metadata?.pending_role
+        if (userPendingRole) {
+          setSelectedRole(userPendingRole)
+        }
+        
+        // If there's a pending role from URL params, use that instead
+        if (pendingRole) {
+          setSelectedRole(pendingRole as UserRole)
         }
 
         setInitializing(false)
+        
+        // If auto-assign is true and we have a pending role, automatically complete setup
+        if (autoAssign && (pendingRole || userPendingRole)) {
+          const roleToAssign = (pendingRole || userPendingRole) as UserRole
+          // Auto-consent for students in streamlined flow
+          if (roleToAssign === 'student') {
+            setIsConsented(true)
+          }
+          // Don't auto-complete if we need names - let user fill them out
+        }
       } catch (error) {
         console.error("Error initializing role setup:", error)
         setError("Failed to initialize role setup. Please try again.")
@@ -82,7 +113,7 @@ export default function RoleSetupPage() {
     }
 
     initializeRoleSetup()
-  }, [router])
+  }, [router, pendingRole, autoAssign])
 
   const handleRoleBasedRedirect = (role: UserRole) => {
     if (role === 'admin') {
@@ -150,14 +181,23 @@ export default function RoleSetupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
       {/* Search params handler in Suspense boundary */}
-      <Suspense fallback={null}>
-        <SearchParamsHandler onMessage={setMessage} />
-      </Suspense>
+              <Suspense fallback={null}>
+          <SearchParamsHandler 
+            onMessage={setMessage}
+            onPendingRole={setPendingRole}
+            onAutoAssign={setAutoAssign}
+          />
+        </Suspense>
       
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl text-emerald-600">WordWise</CardTitle>
-          <CardDescription>Complete your account setup</CardDescription>
+          <CardDescription>
+            {autoAssign && pendingRole === 'student' 
+              ? "Almost there! Just add your name to complete your student account setup."
+              : "Complete your account setup"
+            }
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
@@ -187,12 +227,32 @@ export default function RoleSetupPage() {
               </div>
             </div>
 
-            <RoleSelector
-              selectedRole={selectedRole}
-              onRoleChange={setSelectedRole}
-              onConfirm={handleCompleteRoleSetup}
-              showConfirmButton={false}
-            />
+            {!(autoAssign && pendingRole) && (
+              <RoleSelector
+                selectedRole={selectedRole}
+                onRoleChange={setSelectedRole}
+                onConfirm={handleCompleteRoleSetup}
+                showConfirmButton={false}
+              />
+            )}
+            
+            {autoAssign && pendingRole && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <GraduationCap className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-emerald-900">
+                      {pendingRole === 'student' ? 'Student Account' : 'Administrator Account'}
+                    </h4>
+                    <p className="text-sm text-emerald-700">
+                      You've already selected your role. Just add your name below to get started!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {selectedRole === "student" && (
               <OnboardingConsent

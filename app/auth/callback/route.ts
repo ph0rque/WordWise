@@ -30,8 +30,13 @@ export async function GET(request: NextRequest) {
 
         // If user has pending role data from signup but no assigned role, redirect to assign it
         if (!userRole && pendingRole) {
-          // Redirect to a client-side page that will handle the role assignment
-          return NextResponse.redirect(`${redirectUrl}/auth/assign-role?pending_role=${pendingRole}`)
+          // For students, redirect directly to role setup to complete onboarding seamlessly
+          // For admins, still use the assign-role page for additional verification
+          if (pendingRole === 'student') {
+            return NextResponse.redirect(`${redirectUrl}/auth/role-setup?pending_role=${pendingRole}&auto_assign=true`)
+          } else {
+            return NextResponse.redirect(`${redirectUrl}/auth/assign-role?pending_role=${pendingRole}`)
+          }
         }
 
         // If user has an assigned role, redirect appropriately
