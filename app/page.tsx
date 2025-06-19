@@ -117,6 +117,8 @@ export default function Page() {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        console.log("🔄 Starting auth initialization...")
+        
         // Check if Supabase is configured
         if (!isSupabaseConfigured()) {
           console.log("Supabase not configured, showing demo mode")
@@ -125,16 +127,24 @@ export default function Page() {
           return
         }
 
+        console.log("✅ Supabase is configured")
         const supabase = getSupabaseClient()
         setSupabaseAvailable(true)
         console.log("Supabase configured, initializing auth...")
 
-        // Get initial session
-        const { data: { session } } = await supabase.auth.getSession()
-        console.log("Current session:", session?.user?.email || "No user")
+        // Add timeout for session check
+        console.log("🔍 Getting session...")
+        const sessionPromise = supabase.auth.getSession()
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout')), 10000)
+        )
+
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any
+        console.log("✅ Session retrieved:", session?.user?.email || "No user")
         setUser(session?.user || null)
 
         // Listen for auth changes
+        console.log("🔗 Setting up auth state listener...")
         const {
           data: { subscription },
         } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -148,10 +158,11 @@ export default function Page() {
           }
         })
 
+        console.log("✅ Auth initialization complete")
         setLoading(false)
         return () => subscription.unsubscribe()
       } catch (error) {
-        console.error("Supabase initialization error:", error)
+        console.error("❌ Supabase initialization error:", error)
         setLoadingError(error instanceof Error ? error.message : 'Failed to initialize authentication')
         setSupabaseAvailable(false)
         setLoading(false)

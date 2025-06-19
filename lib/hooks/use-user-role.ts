@@ -29,13 +29,24 @@ export function useUserRole(): UseUserRoleState {
 
   const refreshUserRole = async () => {
     try {
+      console.log('🔄 useUserRole: Starting role refresh...')
       setLoading(true)
       setError(null)
 
       const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      
+      // Add timeout for session check
+      console.log('🔍 useUserRole: Getting session...')
+      const sessionPromise = supabase.auth.getSession()
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('useUserRole session timeout')), 8000)
+      )
+
+      const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any
+      console.log('✅ useUserRole: Session retrieved:', session?.user?.email || "No user")
 
       if (!session?.user) {
+        console.log('🚫 useUserRole: No session, setting unauthenticated state')
         setRole(null)
         setIsAuthenticated(false)
         return
@@ -43,17 +54,24 @@ export function useUserRole(): UseUserRoleState {
 
       setIsAuthenticated(true)
       
-      // Get user role
-      const userRole = await getCurrentUserRole()
-      console.log('useUserRole: Retrieved role:', userRole)
+      // Get user role with timeout
+      console.log('🔍 useUserRole: Getting user role...')
+      const rolePromise = getCurrentUserRole()
+      const roleTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('useUserRole role fetch timeout')), 8000)
+      )
+
+      const userRole = await Promise.race([rolePromise, roleTimeoutPromise]) as UserRole | null
+      console.log('✅ useUserRole: Retrieved role:', userRole)
       setRole(userRole)
       
     } catch (err) {
-      console.error('Error fetching user role:', err)
+      console.error('❌ useUserRole: Error fetching user role:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user role'
       setError(errorMessage)
       setRole(null)
     } finally {
+      console.log('✅ useUserRole: Role refresh complete')
       setLoading(false)
     }
   }
