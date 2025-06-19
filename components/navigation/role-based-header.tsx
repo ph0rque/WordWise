@@ -80,7 +80,8 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
     console.log('Navigate to settings')
   }
 
-  const firstName = user?.user_metadata?.first_name
+  const displayName = user?.user_metadata?.display_name
+  const greetingName = displayName || (currentRole === 'student' ? 'Student' : currentRole === 'admin' ? 'Admin' : 'User')
 
   if (!mounted || !isAuthenticated || !user) {
     return null
@@ -100,11 +101,6 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
         </div>
       </div>
       <div className="flex items-center gap-4">
-        {firstName && (
-          <span className="hidden sm:inline-block text-sm text-gray-600">
-            Hi, {firstName}
-          </span>
-        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
@@ -149,6 +145,9 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <span className="hidden sm:inline-block text-sm text-gray-600 pr-4">
+          Hi, {greetingName}
+        </span>
         {onToggleSidebar && (
           <Button
             variant="ghost"

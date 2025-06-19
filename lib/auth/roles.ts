@@ -252,6 +252,7 @@ export async function completeOnboarding(
         has_consented_to_keystrokes: hasConsented,
         first_name: name.firstName,
         last_name: name.lastName,
+        display_name: `${name.firstName} ${name.lastName}`.trim(),
       },
     })
 
