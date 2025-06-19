@@ -50,6 +50,7 @@ export function RecordingControls({
     averageWPM: 0,
     sessionDuration: 0
   });
+  const [consentDecisionMade, setConsentDecisionMade] = useState(false);
 
   const sessionStartTimeRef = useRef<Date | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -61,16 +62,43 @@ export function RecordingControls({
 
   const loadExistingConsent = async () => {
     try {
+      // Check localStorage first for consent decision
+      const localConsentDecision = localStorage.getItem('keystroke-consent-decision');
+      const localConsentDeclined = localStorage.getItem('keystroke-consent-declined');
+      
+      if (localConsentDeclined === 'true') {
+        setConsentDecisionMade(true);
+        setHasConsent(false);
+        return;
+      }
+
       const response = await fetch('/api/keystroke/consent');
       if (response.ok) {
         const data = await response.json();
         if (data.hasConsent) {
           setHasConsent(true);
           setConsentSettings(data.settings);
+          setConsentDecisionMade(true);
+          // Store positive consent decision in localStorage
+          localStorage.setItem('keystroke-consent-decision', 'accepted');
+        } else if (data.declined) {
+          // Server knows user has declined
+          setConsentDecisionMade(true);
+          setHasConsent(false);
+          localStorage.setItem('keystroke-consent-declined', 'true');
         }
+      } else if (localConsentDecision === 'accepted') {
+        // User had consented before but server doesn't know - clear local storage
+        localStorage.removeItem('keystroke-consent-decision');
       }
     } catch (error) {
       console.error('Error loading consent:', error);
+      // Check localStorage as fallback
+      const localConsentDeclined = localStorage.getItem('keystroke-consent-declined');
+      if (localConsentDeclined === 'true') {
+        setConsentDecisionMade(true);
+        setHasConsent(false);
+      }
     }
   };
 
@@ -87,6 +115,10 @@ export function RecordingControls({
         setHasConsent(true);
         setConsentSettings(consent);
         setShowConsentDialog(false);
+        setConsentDecisionMade(true);
+        // Store consent decision in localStorage
+        localStorage.setItem('keystroke-consent-decision', 'accepted');
+        localStorage.removeItem('keystroke-consent-declined');
         console.log('Consent saved successfully');
       } else {
         throw new Error('Failed to save consent');
@@ -97,9 +129,30 @@ export function RecordingControls({
     }
   };
 
-  const handleConsentDeclined = () => {
-    setShowConsentDialog(false);
-    console.log('User declined keystroke recording');
+  const handleConsentDeclined = async () => {
+    try {
+      // Save decline decision to backend
+      const response = await fetch('/api/keystroke/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ declined: true })
+      });
+
+      setShowConsentDialog(false);
+      setConsentDecisionMade(true);
+      setHasConsent(false);
+      // Store decline decision in localStorage
+      localStorage.setItem('keystroke-consent-declined', 'true');
+      localStorage.removeItem('keystroke-consent-decision');
+      console.log('User declined keystroke recording');
+    } catch (error) {
+      console.error('Error saving decline decision:', error);
+      // Still record locally even if server save fails
+      setShowConsentDialog(false);
+      setConsentDecisionMade(true);
+      setHasConsent(false);
+      localStorage.setItem('keystroke-consent-declined', 'true');
+    }
   };
 
   const startRecording = async () => {
@@ -234,6 +287,11 @@ export function RecordingControls({
       if (response.ok) {
         setHasConsent(false);
         setConsentSettings(null);
+        setConsentDecisionMade(true);
+        // Update localStorage to reflect withdrawal (which is like declining)
+        localStorage.setItem('keystroke-consent-declined', 'true');
+        localStorage.removeItem('keystroke-consent-decision');
+        
         if (isRecording) {
           await stopRecording();
         }
@@ -325,22 +383,42 @@ export function RecordingControls({
         </CardHeader>
         <CardContent className="pt-0">
           {!hasConsent ? (
-            <div className="space-y-3">
-              <Alert>
-                <Shield className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Keystroke recording can help improve your writing.</strong><br />
-                  We need your consent to record your typing patterns for educational analysis.
-                </AlertDescription>
-              </Alert>
-              <Button 
-                onClick={() => setShowConsentDialog(true)}
-                className="w-full"
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                Review Consent Notice
-              </Button>
-            </div>
+            consentDecisionMade ? (
+              <div className="space-y-3">
+                <Alert>
+                  <Shield className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Keystroke recording is disabled.</strong><br />
+                    You have chosen not to participate in keystroke recording.
+                  </AlertDescription>
+                </Alert>
+                <Button 
+                  onClick={() => setShowConsentDialog(true)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Change Consent Decision
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Alert>
+                  <Shield className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Keystroke recording can help improve your writing.</strong><br />
+                    We need your consent to record your typing patterns for educational analysis.
+                  </AlertDescription>
+                </Alert>
+                <Button 
+                  onClick={() => setShowConsentDialog(true)}
+                  className="w-full"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Review Consent Notice
+                </Button>
+              </div>
+            )
           ) : (
             <div className="space-y-3">
               {/* Recording Controls */}
