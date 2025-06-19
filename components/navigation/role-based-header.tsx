@@ -103,12 +103,15 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
       <div className="flex items-center gap-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
+            <Button variant="ghost" className="flex items-center gap-2 px-3 py-2 h-auto rounded-full">
+              <span className="hidden sm:inline-block text-sm text-gray-600">
+                Hi, {greetingName}
+              </span>
               <User className="h-5 w-5" />
               <span className="sr-only">Toggle user menu</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-72">
             <div className="px-3 py-2 border-b">
               <div className="font-medium text-sm">{user.email}</div>
               <div className="text-xs text-gray-500 capitalize">
@@ -145,9 +148,6 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="hidden sm:inline-block text-sm text-gray-600 pr-4">
-          Hi, {greetingName}
-        </span>
         {onToggleSidebar && (
           <Button
             variant="ghost"
