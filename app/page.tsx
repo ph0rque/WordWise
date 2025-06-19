@@ -181,13 +181,35 @@ export default function Page() {
         console.log("✅ Session retrieved:", session?.user?.email || "No user")
         setUser(session?.user || null)
 
-        // Listen for auth changes
+        // Listen for auth changes and handle token refresh
         console.log("🔗 Setting up auth state listener...")
         const {
           data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (_event, session) => {
-          console.log("Auth state changed:", session?.user?.email || "No user")
-          setUser(session?.user || null)
+        } = supabase.auth.onAuthStateChange(async (event, session) => {
+          console.log("Auth state changed:", event, session?.user?.email || "No user")
+          
+          // Handle different auth events
+          switch (event) {
+            case 'SIGNED_IN':
+              console.log("✅ User signed in")
+              setUser(session?.user || null)
+              break
+            case 'SIGNED_OUT':
+              console.log("👋 User signed out")
+              setUser(null)
+              setCurrentDocument(null)
+              break
+            case 'TOKEN_REFRESHED':
+              console.log("🔄 Token refreshed successfully")
+              setUser(session?.user || null)
+              break
+            case 'USER_UPDATED':
+              console.log("👤 User updated")
+              setUser(session?.user || null)
+              break
+            default:
+              setUser(session?.user || null)
+          }
           
           // Handle redirect after authentication
           if (session?.user && redirectTo) {
@@ -197,8 +219,26 @@ export default function Page() {
         })
 
         console.log("✅ Auth initialization complete")
+        
+        // Set up periodic session refresh (every 50 minutes if JWT expires in 1 hour)
+        const refreshInterval = setInterval(async () => {
+          try {
+            const { data, error } = await supabase.auth.refreshSession()
+            if (error) {
+              console.warn("⚠️ Session refresh failed:", error.message)
+            } else {
+              console.log("🔄 Session refreshed automatically")
+            }
+          } catch (err) {
+            console.warn("⚠️ Session refresh error:", err)
+          }
+        }, 50 * 60 * 1000) // 50 minutes
+        
         setLoading(false)
-        return () => subscription.unsubscribe()
+        return () => {
+          subscription.unsubscribe()
+          clearInterval(refreshInterval)
+        }
       } catch (error) {
         console.error("❌ Supabase initialization error:", error)
         setLoadingError(error instanceof Error ? error.message : 'Failed to initialize authentication')
