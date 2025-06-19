@@ -14,8 +14,12 @@ export interface UseUserRoleState {
 }
 
 // Timeout constants
-const ROLE_FETCH_TIMEOUT = 8000 // 8 seconds
+const ROLE_FETCH_TIMEOUT = 15000 // 15 seconds (increased from 8)
+const SESSION_TIMEOUT = 15000 // 15 seconds (increased from 8)
 const RETRY_DELAY = 2000 // 2 seconds
+
+// Global flag to prevent multiple simultaneous session checks
+let isSessionCheckInProgress = false
 
 /**
  * Custom hook for managing user role state and providing role-based UI utilities
@@ -39,28 +43,54 @@ export function useUserRole(): UseUserRoleState {
       console.log('🔍 useUserRole: Getting session...')
       let session = null
       
-      try {
-        const sessionPromise = supabase.auth.getSession()
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 8000)
-        )
-
-        const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any
-        session = sessionData?.session
-        console.log('✅ useUserRole: Session retrieved:', session?.user?.email || "No user")
-      } catch (sessionError) {
-        console.warn('⚠️ useUserRole: Session check failed:', sessionError)
-        // Try to get session synchronously as fallback
+      // Check if another session check is already in progress
+      if (isSessionCheckInProgress) {
+        console.log('⏳ useUserRole: Session check already in progress, waiting...')
+        // Wait a bit and try again
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        if (isSessionCheckInProgress) {
+          console.log('⚠️ useUserRole: Session check still in progress, using fallback')
+          try {
+            const { data: fallbackData } = await supabase.auth.getSession()
+            session = fallbackData?.session
+            console.log('✅ useUserRole: Fallback session retrieved:', session?.user?.email || "No user")
+          } catch (fallbackError) {
+            console.error('❌ useUserRole: Fallback session check failed:', fallbackError)
+            setRole(null)
+            setIsAuthenticated(false)
+            setError('Unable to verify session. Please refresh the page.')
+            return
+          }
+        }
+      }
+      
+      if (!session) {
         try {
-          const { data: fallbackData } = await supabase.auth.getSession()
-          session = fallbackData?.session
-          console.log('✅ useUserRole: Fallback session retrieved:', session?.user?.email || "No user")
-        } catch (fallbackError) {
-          console.error('❌ useUserRole: Fallback session check also failed:', fallbackError)
-          setRole(null)
-          setIsAuthenticated(false)
-          setError('Unable to verify session. Please refresh the page.')
-          return
+          isSessionCheckInProgress = true
+          const sessionPromise = supabase.auth.getSession()
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session check timeout')), SESSION_TIMEOUT)
+          )
+
+          const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any
+          session = sessionData?.session
+          console.log('✅ useUserRole: Session retrieved:', session?.user?.email || "No user")
+        } catch (sessionError) {
+          console.warn('⚠️ useUserRole: Session check failed:', sessionError)
+          // Try to get session without timeout as fallback
+          try {
+            const { data: fallbackData } = await supabase.auth.getSession()
+            session = fallbackData?.session
+            console.log('✅ useUserRole: Fallback session retrieved:', session?.user?.email || "No user")
+          } catch (fallbackError) {
+            console.error('❌ useUserRole: Fallback session check also failed:', fallbackError)
+            setRole(null)
+            setIsAuthenticated(false)
+            setError('Unable to verify session. Please refresh the page.')
+            return
+          }
+        } finally {
+          isSessionCheckInProgress = false
         }
       }
 
@@ -80,7 +110,7 @@ export function useUserRole(): UseUserRoleState {
       try {
         const rolePromise = getCurrentUserRole()
         const roleTimeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Role fetch timeout')), 8000)
+          setTimeout(() => reject(new Error('Role fetch timeout')), ROLE_FETCH_TIMEOUT)
         )
 
         userRole = await Promise.race([rolePromise, roleTimeoutPromise]) as UserRole | null

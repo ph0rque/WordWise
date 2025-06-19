@@ -170,15 +170,35 @@ export default function Page() {
         setSupabaseAvailable(true)
         console.log("Supabase configured, initializing auth...")
 
-        // Add timeout for session check
+        // Add timeout for session check with longer timeout
         console.log("🔍 Getting session...")
-        const sessionPromise = supabase.auth.getSession()
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 10000)
-        )
+        let session = null
+        
+        try {
+          const sessionPromise = supabase.auth.getSession()
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session check timeout')), 20000) // 20 seconds
+          )
 
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any
-        console.log("✅ Session retrieved:", session?.user?.email || "No user")
+          const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any
+          session = sessionData?.session
+          console.log("✅ Session retrieved:", session?.user?.email || "No user")
+        } catch (sessionError) {
+          console.warn("⚠️ Main page session check failed, trying fallback:", sessionError)
+          // Try fallback without timeout
+          try {
+            const { data: fallbackData } = await supabase.auth.getSession()
+            session = fallbackData?.session
+            console.log("✅ Fallback session retrieved:", session?.user?.email || "No user")
+          } catch (fallbackError) {
+            console.error("❌ Fallback session check failed:", fallbackError)
+            // Don't set error here, let useUserRole handle authentication
+            setUser(null)
+            setLoading(false)
+            return
+          }
+        }
+        
         setUser(session?.user || null)
 
         // Listen for auth changes and handle token refresh
@@ -200,49 +220,38 @@ export default function Page() {
               setCurrentDocument(null)
               break
             case 'TOKEN_REFRESHED':
-              console.log("🔄 Token refreshed successfully")
-              setUser(session?.user || null)
-              break
-            case 'USER_UPDATED':
-              console.log("👤 User updated")
+              console.log("🔄 Token refreshed")
               setUser(session?.user || null)
               break
             default:
-              setUser(session?.user || null)
-          }
-          
-          // Handle redirect after authentication
-          if (session?.user && redirectTo) {
-            console.log("Redirecting authenticated user to:", redirectTo)
-            router.push(redirectTo)
+              break
           }
         })
 
-        console.log("✅ Auth initialization complete")
-        
-        // Set up periodic session refresh (every 50 minutes if JWT expires in 1 hour)
+        // Set up automatic session refresh every 50 minutes (before 1-hour expiry)
         const refreshInterval = setInterval(async () => {
           try {
-            const { data, error } = await supabase.auth.refreshSession()
+            console.log("🔄 Auto-refreshing session...")
+            const { error } = await supabase.auth.refreshSession()
             if (error) {
-              console.warn("⚠️ Session refresh failed:", error.message)
+              console.error("❌ Session refresh failed:", error)
             } else {
-              console.log("🔄 Session refreshed automatically")
+              console.log("✅ Session refreshed successfully")
             }
-          } catch (err) {
-            console.warn("⚠️ Session refresh error:", err)
+          } catch (error) {
+            console.error("❌ Session refresh error:", error)
           }
         }, 50 * 60 * 1000) // 50 minutes
-        
-        setLoading(false)
+
+        // Cleanup function
         return () => {
           subscription.unsubscribe()
           clearInterval(refreshInterval)
         }
       } catch (error) {
         console.error("❌ Supabase initialization error:", error)
-        setLoadingError(error instanceof Error ? error.message : 'Failed to initialize authentication')
-        setSupabaseAvailable(false)
+        setLoadingError("Failed to initialize authentication. Please refresh the page.")
+      } finally {
         setLoading(false)
       }
     }
