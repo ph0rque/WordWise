@@ -21,6 +21,7 @@ import { getSupabaseClient } from "@/lib/supabase/client"
 import { getCurrentUserRole, requireAdmin } from "@/lib/auth/roles"
 import { StudentAnalytics } from "@/components/admin/student-analytics"
 import { KeystrokeViewer } from "@/components/admin/keystroke-viewer"
+import { AddStudentDialog } from "@/components/admin/add-student-dialog"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -32,6 +33,9 @@ interface AdminStats {
   totalDocuments: number
   averageGrammarScore: number
   activeThisWeek: number
+  totalRecordings?: number
+  totalChatSessions?: number
+  lastUpdated?: string
 }
 
 export default function AdminDashboard() {
@@ -98,30 +102,21 @@ export default function AdminDashboard() {
 
   const loadStudents = async () => {
     try {
-      // TODO: Replace with proper API call to fetch students
-      // For now, using mock data since we can't query auth.users directly from client
-      const mockStudents: UserWithRole[] = [
-        {
-          id: 'mock-student-1',
-          email: 'student1@example.com',
-          role: 'student',
-          permissions: ROLE_PERMISSIONS.student,
-          created_at: new Date().toISOString(),
-          email_confirmed_at: new Date().toISOString(),
-          last_sign_in_at: new Date().toISOString(),
-        },
-        {
-          id: 'mock-student-2', 
-          email: 'student2@example.com',
-          role: 'student',
-          permissions: ROLE_PERMISSIONS.student,
-          created_at: new Date().toISOString(),
-          email_confirmed_at: new Date().toISOString(),
-          last_sign_in_at: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-        }
-      ]
+      const response = await fetch('/api/admin/students')
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch students')
+      }
 
-      setStudents(mockStudents)
+      const data = await response.json()
+      
+      // Transform API response to match UserWithRole interface
+      const studentsWithPermissions = data.students.map((student: any) => ({
+        ...student,
+        permissions: ROLE_PERMISSIONS.student
+      }))
+
+      setStudents(studentsWithPermissions)
     } catch (err) {
       console.error('Error loading students:', err)
       throw new Error('Failed to load students')
@@ -130,37 +125,23 @@ export default function AdminDashboard() {
 
   const loadAdminStats = async () => {
     try {
-      const supabase = getSupabaseClient()
-
-      // Get document counts and basic stats
-      const { data: documentsData, error: docsError } = await supabase
-        .from('documents')
-        .select('id, user_id, created_at')
-
-      if (docsError) {
-        console.error('Error loading documents:', docsError)
-        // Don't throw, just use default stats
+      const response = await fetch('/api/admin/stats')
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch admin stats')
       }
 
-      // Calculate stats
-      const totalDocuments = documentsData?.length || 0
-      const oneWeekAgo = new Date()
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-
-      const activeThisWeek = students.filter(student => 
-        student.last_sign_in_at && 
-        new Date(student.last_sign_in_at) > oneWeekAgo
-      ).length
-
-      setStats({
-        totalStudents: students.length,
-        totalDocuments,
-        averageGrammarScore: 85, // Placeholder - will be calculated from real data later
-        activeThisWeek
-      })
+      const data = await response.json()
+      setStats(data.stats)
     } catch (err) {
       console.error('Error loading admin stats:', err)
       // Use default stats if there's an error
+      setStats({
+        totalStudents: students.length,
+        totalDocuments: 0,
+        averageGrammarScore: 85,
+        activeThisWeek: 0
+      })
     }
   }
 
@@ -342,10 +323,7 @@ export default function AdminDashboard() {
                       View and manage all student accounts
                     </CardDescription>
                   </div>
-                  <Button size="sm" className="flex items-center space-x-2">
-                    <Plus className="h-4 w-4" />
-                    <span>Add Student</span>
-                  </Button>
+                  <AddStudentDialog onStudentAdded={() => setRefreshFlag(prev => prev + 1)} />
                 </div>
               </CardHeader>
               <CardContent>
