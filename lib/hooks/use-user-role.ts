@@ -35,15 +35,34 @@ export function useUserRole(): UseUserRoleState {
 
       const supabase = getSupabaseClient()
       
-      // Add timeout for session check
+      // Add timeout for session check with better error handling
       console.log('🔍 useUserRole: Getting session...')
-      const sessionPromise = supabase.auth.getSession()
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('useUserRole session timeout')), 8000)
-      )
+      let session = null
+      
+      try {
+        const sessionPromise = supabase.auth.getSession()
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout')), 8000)
+        )
 
-      const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any
-      console.log('✅ useUserRole: Session retrieved:', session?.user?.email || "No user")
+        const { data: sessionData } = await Promise.race([sessionPromise, timeoutPromise]) as any
+        session = sessionData?.session
+        console.log('✅ useUserRole: Session retrieved:', session?.user?.email || "No user")
+      } catch (sessionError) {
+        console.warn('⚠️ useUserRole: Session check failed:', sessionError)
+        // Try to get session synchronously as fallback
+        try {
+          const { data: fallbackData } = await supabase.auth.getSession()
+          session = fallbackData?.session
+          console.log('✅ useUserRole: Fallback session retrieved:', session?.user?.email || "No user")
+        } catch (fallbackError) {
+          console.error('❌ useUserRole: Fallback session check also failed:', fallbackError)
+          setRole(null)
+          setIsAuthenticated(false)
+          setError('Unable to verify session. Please refresh the page.')
+          return
+        }
+      }
 
       if (!session?.user) {
         console.log('🚫 useUserRole: No session, setting unauthenticated state')
@@ -54,22 +73,32 @@ export function useUserRole(): UseUserRoleState {
 
       setIsAuthenticated(true)
       
-      // Get user role with timeout
+      // Get user role with timeout and better error handling
       console.log('🔍 useUserRole: Getting user role...')
-      const rolePromise = getCurrentUserRole()
-      const roleTimeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('useUserRole role fetch timeout')), 8000)
-      )
+      let userRole = null
+      
+      try {
+        const rolePromise = getCurrentUserRole()
+        const roleTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Role fetch timeout')), 8000)
+        )
 
-      const userRole = await Promise.race([rolePromise, roleTimeoutPromise]) as UserRole | null
-      console.log('✅ useUserRole: Retrieved role:', userRole)
+        userRole = await Promise.race([rolePromise, roleTimeoutPromise]) as UserRole | null
+        console.log('✅ useUserRole: Retrieved role:', userRole)
+      } catch (roleError) {
+        console.warn('⚠️ useUserRole: Role fetch failed:', roleError)
+        // Continue with null role - user is authenticated but role is unknown
+        userRole = null
+      }
+      
       setRole(userRole)
       
     } catch (err) {
-      console.error('❌ useUserRole: Error fetching user role:', err)
+      console.error('❌ useUserRole: Error in refreshUserRole:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user role'
       setError(errorMessage)
       setRole(null)
+      setIsAuthenticated(false)
     } finally {
       console.log('✅ useUserRole: Role refresh complete')
       setLoading(false)
@@ -164,6 +193,33 @@ export function useRoleBasedFeatures() {
       currentRole: role,
       hasRole: !!role,
       isAuthenticated,
+      loading: false,
+      error,
+    }
+  }
+
+  // If there's an error and user is not authenticated, provide minimal functionality
+  if (error && !isAuthenticated) {
+    console.warn('Authentication failed due to error:', error)
+    return {
+      canViewAdminDashboard: false,
+      canManageStudents: false,
+      canViewKeystrokeRecordings: false,
+      canAccessAnalytics: false,
+      canManageSettings: false,
+      canRecordKeystrokes: false,
+      canUseAITutor: false,
+      canViewWritingAnalytics: false,
+      canCreateDocuments: false,
+      canUseGrammarChecker: false,
+      canSaveWork: false,
+      showAdminNavigation: false,
+      showStudentTools: false,
+      showKeystrokeNotice: false,
+      showUpgradePrompts: false,
+      currentRole: null,
+      hasRole: false,
+      isAuthenticated: false,
       loading: false,
       error,
     }
