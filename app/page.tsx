@@ -23,6 +23,7 @@ import {
 import { RightSidebar } from "@/components/sidebar/right-sidebar"
 import { checkAIAvailability } from "@/lib/client-grammar-checker"
 import { cn } from "@/lib/utils"
+import { DebugDocuments } from "@/components/debug-documents"
 
 function SearchParamsHandler({ onRedirectTo }: { onRedirectTo: (redirectTo: string | null) => void }) {
   const searchParams = useSearchParams()
@@ -372,6 +373,17 @@ export default function Page() {
         <div className="flex flex-1 overflow-hidden">
           <div className="container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 md:grid-cols-[3fr_1.5fr]">
             <main className="flex flex-col gap-4">
+              {/* Temporary Debug Component - Remove after testing */}
+              <DebugDocuments />
+              
+              {/* Document Manager */}
+              <DocumentManager
+                onSelectDocument={handleSelectDocument}
+                onNewDocument={setCurrentDocument}
+                currentDocumentId={currentDocument?.id}
+                refreshDocumentsFlag={refreshDocumentsFlag}
+              />
+              
               {currentDocument ? (
                 <TextEditor
                   key={currentDocument.id}

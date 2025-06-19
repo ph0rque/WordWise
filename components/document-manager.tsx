@@ -111,9 +111,34 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
         return
       }
 
+      console.log("🔍 DEBUG: Current user details:", {
+        id: userData.user.id,
+        email: userData.user.email,
+        role: userData.user.user_metadata?.role,
+        allMetadata: userData.user.user_metadata
+      })
+
       console.log("Fetching documents for user:", userData.user.id)
 
-      // Fetch documents with explicit user filtering (in addition to RLS)
+      // First, let's try to see if there are ANY documents at all (for debugging)
+      console.log("🔍 DEBUG: Checking if we can access documents table...")
+      const { data: allDocsTest, error: allDocsError } = await supabase
+        .from("documents")
+        .select("id, user_id, title, created_at")
+        .limit(5)
+
+      if (allDocsError) {
+        console.error("❌ DEBUG: Cannot access documents table:", allDocsError)
+      } else {
+        console.log("✅ DEBUG: Can access documents table. Sample documents:", allDocsTest)
+        console.log("🔍 DEBUG: Looking for documents with user_id:", userData.user.id)
+        
+        // Check if any documents match our user ID
+        const matchingDocs = allDocsTest?.filter(doc => doc.user_id === userData.user.id) || []
+        console.log("🔍 DEBUG: Documents matching current user:", matchingDocs)
+      }
+
+      // Now fetch documents with explicit user filtering (in addition to RLS)
       const { data, error } = await supabase
         .from("documents")
         .select("*")
@@ -121,7 +146,13 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
         .order("updated_at", { ascending: false })
 
       if (error) {
-        console.error("Error fetching documents:", error)
+        console.error("❌ Error fetching user documents:", error)
+        console.log("🔍 DEBUG: Full error details:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
 
         // Check if the error is because the table doesn't exist
         if (error.message.includes('relation "public.documents" does not exist')) {
@@ -131,13 +162,23 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
           setError(`Failed to load documents: ${error.message}`)
         }
       } else {
-        console.log(`Fetched ${data?.length || 0} documents for user ${userData.user.id}`)
+        console.log(`✅ Fetched ${data?.length || 0} documents for user ${userData.user.id}`)
+        if (data && data.length > 0) {
+          console.log("📄 DEBUG: Document details:", data.map(doc => ({
+            id: doc.id,
+            title: doc.title,
+            user_id: doc.user_id,
+            created_at: doc.created_at
+          })))
+        } else {
+          console.log("📄 DEBUG: No documents found for this user")
+        }
         setDocuments(data || [])
         setError("")
         setNeedsSetup(false)
       }
     } catch (error) {
-      console.error("Error fetching documents:", error)
+      console.error("❌ Error fetching documents:", error)
       setError("Failed to connect to database. Please check your Supabase configuration.")
     }
     setLoading(false)
