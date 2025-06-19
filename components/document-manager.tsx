@@ -17,9 +17,10 @@ interface DocumentManagerProps {
   onNewDocument: (document: Document) => void
   currentDocumentId?: string
   refreshDocumentsFlag?: number
+  onDocumentsLoaded?: (hasDocuments: boolean) => void
 }
 
-export function DocumentManager({ onSelectDocument, onNewDocument, currentDocumentId, refreshDocumentsFlag }: DocumentManagerProps) {
+export function DocumentManager({ onSelectDocument, onNewDocument, currentDocumentId, refreshDocumentsFlag, onDocumentsLoaded }: DocumentManagerProps) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [newDocTitle, setNewDocTitle] = useState("")
@@ -176,6 +177,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
         setDocuments(data || [])
         setError("")
         setNeedsSetup(false)
+        onDocumentsLoaded?.(data && data.length > 0)
       }
     } catch (error) {
       console.error("❌ Error fetching documents:", error)

@@ -23,7 +23,6 @@ import {
 import { RightSidebar } from "@/components/sidebar/right-sidebar"
 import { checkAIAvailability } from "@/lib/client-grammar-checker"
 import { cn } from "@/lib/utils"
-import { DebugDocuments } from "@/components/debug-documents"
 
 function SearchParamsHandler({ onRedirectTo }: { onRedirectTo: (redirectTo: string | null) => void }) {
   const searchParams = useSearchParams()
@@ -56,6 +55,7 @@ export default function Page() {
   const [suggestionsPanelProps, setSuggestionsPanelProps] = useState<any>({})
   const [mounted, setMounted] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [hasDocuments, setHasDocuments] = useState(false)
 
   // Role-based features - only use after component mounts to avoid hydration issues
   const roleFeatures = useRoleBasedFeatures()
@@ -413,17 +413,6 @@ export default function Page() {
         <div className="flex flex-1 overflow-hidden">
           <div className="container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 md:grid-cols-[3fr_1.5fr]">
             <main className="flex flex-col gap-4">
-              {/* Temporary Debug Component - Remove after testing */}
-              <DebugDocuments />
-              
-              {/* Document Manager */}
-              <DocumentManager
-                onSelectDocument={handleSelectDocument}
-                onNewDocument={setCurrentDocument}
-                currentDocumentId={currentDocument?.id}
-                refreshDocumentsFlag={refreshDocumentsFlag}
-              />
-              
               {currentDocument ? (
                 <TextEditor
                   key={currentDocument.id}
@@ -437,10 +426,13 @@ export default function Page() {
                 <div className="flex h-full min-h-[500px] items-center justify-center rounded-lg border border-dashed shadow-sm">
                   <div className="flex flex-col items-center gap-1 text-center">
                     <h3 className="text-2xl font-bold tracking-tight">
-                      No documents found
+                      {hasDocuments ? "Select a document to get started" : "No documents found"}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Create your first document to get started.
+                      {hasDocuments 
+                        ? "Choose a document from your collection or create a new one."
+                        : "Create your first document to get started."
+                      }
                     </p>
                     <Button className="mt-4" onClick={handleNewDocument}>
                       Create New Document
@@ -449,8 +441,17 @@ export default function Page() {
                 </div>
               )}
             </main>
-            <aside className="hidden md:block">
+            <aside className="hidden md:flex md:flex-col md:gap-4">
               <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
+              
+              {/* Document Manager positioned under the sidebar */}
+              <DocumentManager
+                onSelectDocument={handleSelectDocument}
+                onNewDocument={setCurrentDocument}
+                currentDocumentId={currentDocument?.id}
+                refreshDocumentsFlag={refreshDocumentsFlag}
+                onDocumentsLoaded={setHasDocuments}
+              />
             </aside>
           </div>
           
@@ -462,7 +463,18 @@ export default function Page() {
               isSidebarOpen ? "translate-x-0" : "translate-x-full"
             )}
           >
-            <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
+            <div className="flex flex-col gap-4 p-4">
+              <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
+              
+              {/* Document Manager for mobile */}
+              <DocumentManager
+                onSelectDocument={handleSelectDocument}
+                onNewDocument={setCurrentDocument}
+                currentDocumentId={currentDocument?.id}
+                refreshDocumentsFlag={refreshDocumentsFlag}
+                onDocumentsLoaded={setHasDocuments}
+              />
+            </div>
           </div>
         </div>
       </main>
