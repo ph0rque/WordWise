@@ -45,20 +45,20 @@ export function TextEditor({
 
   const debouncedSave = useDebouncedCallback(async (newTitle: string, newContent: string) => {
     setIsSaving(true)
-    const supabase = getSupabaseClient()
-    const { data, error } = await supabase
-      .from("documents")
-      .update({
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase
+        .from("documents")
+        .update({
         title: newTitle,
         content: newContent,
         updated_at: new Date().toISOString(),
-      })
+        })
       .eq("id", initialDocument.id)
-      .select()
-      .single()
+        .select()
+        .single()
 
-    if (error) {
-      console.error("Error saving document:", error)
+      if (error) {
+        console.error("Error saving document:", error)
       // Handle error
     } else if (data) {
       onSave(data)
@@ -74,7 +74,7 @@ export function TextEditor({
   }
 
   if (!editor) {
-    return null
+        return null
   }
 
   return (
