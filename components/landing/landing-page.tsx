@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,8 +22,11 @@ import {
 import Link from "next/link"
 import DemoSection from "./demo-section"
 import TestimonialsSection from "./testimonials-section"
+import { AuthModal } from "./auth-modal"
 
 export default function LandingPage() {
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Navigation */}
@@ -34,16 +38,13 @@ export default function LandingPage() {
               <span className="text-2xl font-bold text-gray-900">WordWise</span>
             </div>
             <div className="flex items-center space-x-4">
-              <Link href="/auth/role-setup">
-                <Button variant="outline" size="sm">
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/auth/role-setup">
-                <Button size="sm">
-                  Get Started
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsAuthModalOpen(true)}
+              >
+                Sign In / Sign Up
+              </Button>
             </div>
           </div>
         </div>
@@ -65,15 +66,13 @@ export default function LandingPage() {
               WordWise helps high school students improve their academic writing with real-time grammar checking, vocabulary enhancement, and AI tutoring - while giving educators powerful tools to monitor progress and verify original work.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/auth/role-setup">
-                <Button size="lg" className="w-full sm:w-auto">
-                  Start Writing Better Essays
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                Watch Demo
-                <Play className="ml-2 h-4 w-4" />
+              <Button 
+                size="lg" 
+                className="w-full sm:w-auto"
+                onClick={() => setIsAuthModalOpen(true)}
+              >
+                Start Writing Better Essays
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -390,12 +389,15 @@ export default function LandingPage() {
             Join thousands of students and educators who are already improving their academic writing with WordWise.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/role-setup">
-              <Button size="lg" variant="secondary" className="w-full sm:w-auto">
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            <Button 
+              size="lg" 
+              variant="secondary" 
+              className="w-full sm:w-auto"
+              onClick={() => setIsAuthModalOpen(true)}
+            >
+              Get Started Free
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
             <Button size="lg" variant="outline" className="w-full sm:w-auto border-white text-white hover:bg-white hover:text-gray-900">
               Schedule Demo
             </Button>
@@ -453,6 +455,9 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Auth Modal */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   )
 } 
