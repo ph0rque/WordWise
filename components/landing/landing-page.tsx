@@ -383,7 +383,7 @@ export default function LandingPage() {
           <p className="text-xl mb-8 text-blue-100">
             Join thousands of students and educators who are already improving their academic writing with WordWise.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex justify-center">
             <Button 
               size="lg" 
               variant="secondary" 
@@ -392,9 +392,6 @@ export default function LandingPage() {
             >
               Start Writing Better Essays
               <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto border-white text-white hover:bg-white hover:text-gray-900">
-              Schedule Demo
             </Button>
           </div>
         </div>
