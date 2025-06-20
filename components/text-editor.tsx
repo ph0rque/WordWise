@@ -9,6 +9,8 @@ import { DocumentActions } from "./editor/document-actions"
 import { DocumentSwitcherDialog } from "./editor/document-switcher-dialog"
 import { Badge } from "@/components/ui/badge"
 import { checkAcademicGrammarClient } from "@/lib/client-academic-grammar-checker"
+import { AutomaticRecorder, AutomaticRecorderRef } from "@/components/keystroke/automatic-recorder"
+import { useUserRole } from "@/lib/hooks/use-user-role"
 
 // Extend Window interface for global suggestion storage
 declare global {
@@ -40,6 +42,12 @@ export function TextEditor({
   const [isCheckingGrammar, setIsCheckingGrammar] = useState(false)
   const [isUserCorrecting, setIsUserCorrecting] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
+  const textAreaRef = useRef<HTMLTextAreaElement>(null)
+  const recorderRef = useRef<AutomaticRecorderRef>(null)
+  const userId = initialDocument.user_id || 'anonymous-user'
+  
+  // Get user role for keystroke recording
+  const { role, isStudent } = useUserRole()
 
   // Update content when document changes
   useEffect(() => {
@@ -59,11 +67,8 @@ export function TextEditor({
 
   // Grammar checking function
   const debouncedGrammarCheck = useDebouncedCallback(async (text: string) => {
-    console.log('Grammar check triggered for:', text)
-    
     // Don't check grammar if user is currently correcting an error
     if (isUserCorrecting) {
-      console.log('Skipping grammar check - user is correcting')
       return
     }
     
@@ -140,6 +145,20 @@ export function TextEditor({
     setIsSaving(false)
   }, 1500)
 
+  // Manual save function that stops recording
+  const handleManualSave = async () => {
+    console.log('💾 Manual save triggered, stopping keystroke recording...')
+    
+    // Stop keystroke recording when user manually saves
+    if (recorderRef.current?.isRecording) {
+      await recorderRef.current.stopRecording()
+      console.log('⏹️ Keystroke recording stopped and session saved')
+    }
+    
+    // Trigger the regular save
+    await debouncedSave(title, content)
+  }
+
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value)
     debouncedSave(e.target.value, content)
@@ -200,7 +219,6 @@ export function TextEditor({
     ]
     
         if (wordCompletionKeys.includes(e.key)) {
-      console.log('Word completion detected:', e.key)
       // Get the text content for grammar checking
       const plainText = editorRef.current.textContent || ""
       
@@ -573,13 +591,26 @@ export function TextEditor({
         <div className="flex items-center gap-2">
           <DocumentActions
             onNew={onNew}
-            onSave={() => debouncedSave(title, content)}
+            onSave={handleManualSave}
             onDelete={() => onDelete(initialDocument.id)}
             onSwitch={() => setIsSwitching(true)}
             isSaving={isSaving}
+            documentId={initialDocument.id}
+            documentTitle={title}
           />
         </div>
       </div>
+
+            {/* Automatic Keystroke Recording - Only for Students, Invisible */}
+      {isStudent && (
+        <AutomaticRecorder
+          ref={recorderRef}
+          documentId={initialDocument.id}
+          documentTitle={title}
+          studentName={userId}
+          editorRef={editorRef}
+        />
+      )}
 
       {/* Editor */}
       <div className="flex-1 overflow-y-auto relative">

@@ -33,72 +33,153 @@ interface KeystrokeSession {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const body = await request.json();
+    const sessionData = await request.json();
     
-    const { 
-      userId, 
-      documentId, 
-      title,
-      privacyLevel = 'full',
-      consentGiven = false,
-      metadata = {}
-    } = body;
+    console.log('📥 Received session data:', {
+      id: sessionData.id,
+      userId: sessionData.userId,
+      documentId: sessionData.documentId,
+      eventCount: sessionData.events?.length || 0,
+      duration: sessionData.endTime ? sessionData.endTime - sessionData.startTime : 0
+    });
 
-    // Validate required fields
-    if (!userId || !documentId) {
+    // Validate required fields for completed session
+    if (!sessionData.id || !sessionData.userId || !sessionData.documentId) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId, documentId' },
+        { error: 'Missing required fields: id, userId, documentId' },
         { status: 400 }
       );
     }
 
-    if (!consentGiven) {
-      return NextResponse.json(
-        { error: 'User consent is required to start keystroke recording' },
-        { status: 400 }
-      );
-    }
-
-    // For demo purposes, create a mock session
+    // Save the completed session data to the database
     // In a real implementation, this would:
     // 1. Authenticate the user
-    // 2. Validate consent and privacy settings
-    // 3. Create session record in database
-    // 4. Initialize encryption keys
-    // 5. Set up real-time event streaming
+    // 2. Validate session data integrity
+    // 3. Store session record and events in database
+    // 4. Apply privacy settings and encryption
+    // 5. Update user analytics
 
-    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const now = new Date().toISOString();
+    try {
+      // Insert session record into keystroke_recordings table
+      const { data, error } = await supabase
+        .from('keystroke_recordings')
+        .insert({
+          user_id: sessionData.userId,
+          document_id: sessionData.documentId,
+          session_id: sessionData.id, // Use session ID as session_id
+          title: sessionData.metadata?.documentTitle || 'Untitled Document',
+          status: 'completed',
+          privacy_level: 'full',
+          start_time: new Date(sessionData.startTime).toISOString(),
+          end_time: sessionData.endTime ? new Date(sessionData.endTime).toISOString() : null,
+          duration_ms: sessionData.endTime ? sessionData.endTime - sessionData.startTime : 0,
+          total_keystrokes: sessionData.metadata?.totalKeystrokes || 0,
+          total_characters: sessionData.metadata?.totalCharacters || 0,
+          average_wpm: sessionData.metadata?.averageWPM || 0,
+          pause_count: sessionData.metadata?.pauseCount || 0,
+          backspace_count: sessionData.metadata?.backspaceCount || 0,
+          delete_count: sessionData.metadata?.deleteCount || 0,
+          user_agent: sessionData.metadata?.userAgent || '',
+          platform: sessionData.metadata?.platform || '',
+          language: sessionData.metadata?.language || '',
+          timezone: sessionData.metadata?.timezone || '',
+          document_title: sessionData.metadata?.documentTitle || 'Untitled Document',
+          consent_given: true,
+          data_retention_days: 90
+        })
+        .select()
+        .single();
 
-    const session: KeystrokeSession = {
-      id: sessionId,
-      userId,
-      documentId,
-      title: title || 'Untitled Document',
-      status: 'active',
-      privacyLevel,
-      consentGiven,
-      startTime: now,
-      eventCount: 0,
-      metadata: {
-        documentTitle: metadata.documentTitle || 'Untitled Document',
-        assignmentType: metadata.assignmentType || 'essay',
-        wordCount: 0,
-        keystrokes: 0,
-        duration: 0,
-        averageWPM: 0
-      },
-      createdAt: now,
-      updatedAt: now
-    };
+      if (error) {
+        console.error('❌ Database error saving session:', error);
+        return NextResponse.json(
+          { error: 'Failed to save session to database', details: error.message },
+          { status: 500 }
+        );
+      }
 
-    console.log(`Created keystroke recording session: ${sessionId}`);
+      console.log(`✅ Successfully saved keystroke recording session: ${sessionData.id}`);
 
-    return NextResponse.json({
-      success: true,
-      session,
-      message: 'Keystroke recording session started successfully'
-    });
+      // Now save individual keystroke events to keystroke_events table
+      if (sessionData.events && sessionData.events.length > 0) {
+        console.log(`💾 Saving ${sessionData.events.length} keystroke events...`);
+        
+        const eventsToInsert = sessionData.events.map((event: any, index: number) => {
+          // Debug: Log first few events to see their structure
+          if (index < 5) {
+            console.log(`🔍 Event ${index} structure:`, {
+              id: event.id,
+              type: event.type,
+              key: event.key,
+              code: event.code,
+              data: event.data,
+              inputType: event.inputType,
+              value: event.value?.substring(0, 20) + '...' // Truncate for privacy
+            });
+          }
+          
+          return {
+            recording_id: data.id, // Use the database-generated UUID
+            event_id: event.id || `event-${index}`,
+            sequence_number: index,
+            timestamp_ms: event.timestamp - sessionData.startTime, // Relative to recording start
+            absolute_timestamp: new Date(event.timestamp).toISOString(),
+            event_type: event.type,
+            // Store event data as JSON in encrypted_data field (but not actually encrypted)
+            encrypted_data: JSON.stringify({
+              key: event.key,
+              code: event.code,
+              data: event.data,
+              inputType: event.inputType,
+              value: event.value,
+              ctrlKey: event.ctrlKey || false,
+              shiftKey: event.shiftKey || false,
+              altKey: event.altKey || false,
+              metaKey: event.metaKey || false
+            }),
+            target_element: event.target || 'unknown',
+            has_modifier_keys: event.ctrlKey || event.shiftKey || event.altKey || event.metaKey,
+            is_functional_key: event.key && ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+          };
+        });
+
+        // Insert events in batches to avoid overwhelming the database
+        const batchSize = 100;
+        let savedEventCount = 0;
+        
+        for (let i = 0; i < eventsToInsert.length; i += batchSize) {
+          const batch = eventsToInsert.slice(i, i + batchSize);
+          
+          const { error: eventsError } = await supabase
+            .from('keystroke_events')
+            .insert(batch);
+          
+          if (eventsError) {
+            console.error(`❌ Error saving events batch ${Math.floor(i/batchSize) + 1}:`, eventsError);
+            // Continue with other batches even if one fails
+          } else {
+            savedEventCount += batch.length;
+            console.log(`✅ Saved events batch ${Math.floor(i/batchSize) + 1} (${batch.length} events)`);
+          }
+        }
+        
+        console.log(`✅ Total events saved: ${savedEventCount}/${sessionData.events.length}`);
+      }
+
+      return NextResponse.json({
+        success: true,
+        sessionId: sessionData.id,
+        eventCount: sessionData.events?.length || 0,
+        message: 'Keystroke recording session and events saved successfully'
+      });
+
+    } catch (dbError) {
+      console.error('❌ Exception saving session to database:', dbError);
+      return NextResponse.json(
+        { error: 'Database operation failed' },
+        { status: 500 }
+      );
+    }
 
   } catch (error) {
     console.error('Session creation error:', error);

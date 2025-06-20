@@ -1,4 +1,4 @@
-import { decrypt } from '../utils/encryption';
+// Encryption/decryption removed for simplicity
 
 /**
  * Keystroke Playback Engine
@@ -139,46 +139,71 @@ export class KeystrokePlaybackEngine {
       const recordingData = data.recording;
       const eventsData = data.events || [];
       
-      // Check if this is demo data (demo recording IDs start with 'demo-')
-      const isDemoData = recordingId.startsWith('demo-');
-      
-      // Decrypt and process events
-      const decryptedEvents = await Promise.all(
-        eventsData.map(async (event: any) => {
-          let originalData;
-          
-          if (isDemoData) {
-            // For demo data, create mock keystroke data instead of decrypting
-            originalData = {
-              key: event.event_type === 'backspace' ? 'Backspace' : 'a',
-              code: event.event_type === 'backspace' ? 'Backspace' : 'KeyA',
-              value: event.event_type === 'backspace' ? '' : 'a',
-              type: event.event_type,
-              timestamp: event.timestamp_ms
-            };
-          } else {
-            // For real data, decrypt normally
-            const decryptedData = await decrypt(event.encryptedData);
-            originalData = JSON.parse(decryptedData);
-          }
-          
-          return {
-            id: event.id,
-            eventId: event.event_id,
-            sequenceNumber: event.sequence_number,
-            timestampMs: event.timestamp_ms,
-            absoluteTimestamp: new Date(event.absolute_timestamp),
-            eventType: event.event_type,
-            originalData: originalData,
-            targetElement: event.target_element,
-            hasModifierKeys: event.has_modifier_keys,
-            isFunctionalKey: event.is_functional_key
+      // Process events (no encryption/decryption)
+      const processedEvents = eventsData.map((event: any) => {
+        let originalData;
+        
+        // Check if we have direct columns first (preferred), then fall back to encrypted_data
+        if (event.key !== undefined || event.code !== undefined || event.data !== undefined) {
+          // Use direct event fields (new schema)
+          originalData = {
+            key: event.key || 'unknown',
+            code: event.code || 'unknown', 
+            data: event.data || event.key || '',
+            type: event.event_type,
+            ctrlKey: event.ctrlKey || false,
+            shiftKey: event.shiftKey || false,
+            altKey: event.altKey || false,
+            metaKey: event.metaKey || false
           };
-        })
-      );
+        } else if (event.encrypted_data) {
+          try {
+            // Parse JSON data from encrypted_data field (fallback)
+            let jsonString = event.encrypted_data;
+            
+            // Check if it's hex-encoded (starts with \x)
+            if (jsonString.startsWith('\\x')) {
+              // Remove the \x prefix and decode from hex
+              const hexString = jsonString.substring(2);
+              // Decode hex to string (browser-compatible)
+              jsonString = hexString.match(/.{1,2}/g)?.map((byte: string) => String.fromCharCode(parseInt(byte, 16))).join('') || '';
+            }
+            
+            originalData = JSON.parse(jsonString);
+            
+            // If the parsed data doesn't have key information, try to infer it from event type
+            if (!originalData.key && !originalData.data) {
+              // For input events, we might need to reconstruct the data
+              if (event.event_type === 'input') {
+                originalData.key = 'unknown';
+                originalData.data = ''; // We'll have to skip this event
+              }
+            }
+          } catch (error) {
+            originalData = { key: 'unknown', type: 'unknown' };
+          }
+        } else {
+          // No data available
+          console.warn('⚠️ No event data available:', event);
+          originalData = { key: 'unknown', type: 'unknown' };
+        }
+        
+        return {
+          id: event.id,
+          eventId: event.event_id || event.id,
+          sequenceNumber: event.sequence_number,
+          timestampMs: event.timestamp_ms,
+          absoluteTimestamp: new Date(event.absolute_timestamp),
+          eventType: event.event_type,
+          originalData: originalData,
+          targetElement: event.target_element,
+          hasModifierKeys: event.has_modifier_keys,
+          isFunctionalKey: event.is_functional_key
+        };
+      });
 
       // Sort events by sequence number
-      decryptedEvents.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+      processedEvents.sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber);
 
       this.recording = {
         id: recordingData.id,
@@ -190,7 +215,7 @@ export class KeystrokePlaybackEngine {
         totalKeystrokes: recordingData.total_keystrokes,
         totalCharacters: recordingData.total_characters,
         averageWpm: recordingData.average_wpm,
-        events: decryptedEvents
+        events: processedEvents
       };
 
       // Update state
@@ -378,6 +403,13 @@ export class KeystrokePlaybackEngine {
   }
 
   /**
+   * Get current content
+   */
+  getCurrentContent(): string {
+    return this.currentContent;
+  }
+
+  /**
    * Add event listener
    */
   on(event: string, callback: Function): void {
@@ -456,11 +488,15 @@ export class KeystrokePlaybackEngine {
   private processEvent(event: PlaybackEvent): void {
     try {
       const { originalData } = event;
-
+      
       switch (event.eventType) {
         case 'keydown':
         case 'keyup':
           this.processKeyEvent(originalData, event.eventType);
+          break;
+        case 'key':
+          // Handle 'key' event type (which seems to be what's recorded)
+          this.processKeyEvent(originalData, 'keydown');
           break;
         case 'input':
           this.processInputEvent(originalData);
@@ -475,7 +511,7 @@ export class KeystrokePlaybackEngine {
           this.processSelectionEvent(originalData);
           break;
         default:
-          console.warn('Unknown event type:', event.eventType);
+          console.warn('Unknown event type:', event.eventType, originalData);
       }
 
       this.emit('eventProcessed', event);
@@ -523,12 +559,21 @@ export class KeystrokePlaybackEngine {
    * Process input events
    */
   private processInputEvent(data: any): void {
+    // Handle both new format (inputType) and recorded format (key-based)
     if (data.inputType === 'insertText' && data.data) {
       this.insertText(data.data);
     } else if (data.inputType === 'deleteContentBackward') {
       this.handleBackspace();
     } else if (data.inputType === 'deleteContentForward') {
       this.handleDelete();
+    } else if (data.key && data.data && data.key !== 'Backspace' && data.key !== 'Delete' && data.key !== 'Enter' && data.key !== 'Tab') {
+      // Handle recorded format: insert the character if it's a printable character
+      if (data.data.length === 1 && data.data !== '\n' && data.data !== '\t') {
+        this.insertText(data.data);
+      } else if (data.key.length === 1) {
+        // Fallback to key if data is not available
+        this.insertText(data.key);
+      }
     }
   }
 
@@ -618,16 +663,12 @@ export class KeystrokePlaybackEngine {
    * Update the target element content
    */
   private updateTargetElement(content: string): void {
-    if (this.targetElement) {
-      if (this.targetElement.tagName === 'TEXTAREA' || this.targetElement.tagName === 'INPUT') {
-        (this.targetElement as HTMLInputElement).value = content;
-      } else {
-        this.targetElement.textContent = content;
-      }
-
-      if (this.config.highlightChanges) {
-        this.highlightRecentChanges();
-      }
+    // Don't update DOM directly - let React handle it through events
+    // Just emit a content change event
+    this.emit('contentChanged', content);
+    
+    if (this.targetElement && this.config.highlightChanges) {
+      this.highlightRecentChanges();
     }
   }
 

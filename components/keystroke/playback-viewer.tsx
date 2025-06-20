@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, Download, Eye, EyeOff, Settings } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+
 import { KeystrokePlaybackEngine, PlaybackRecording, PlaybackState, PlaybackAnalytics } from '@/lib/keystroke/playback';
 import { PlaybackControls } from './playback-controls';
 
@@ -36,7 +36,6 @@ export function PlaybackViewer({
 
   // Content display
   const [currentContent, setCurrentContent] = useState('');
-  const [isContentVisible, setIsContentVisible] = useState(true);
 
   // DOM refs
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -73,11 +72,9 @@ export function PlaybackViewer({
         onRecordingLoad?.(loadedRecording);
       });
 
-      engine.on('eventProcessed', () => {
-        // Update content display when events are processed
-        if (contentRef.current) {
-          setCurrentContent(contentRef.current.value);
-        }
+      engine.on('contentChanged', (content: string) => {
+        // Update content display when content changes
+        setCurrentContent(content);
       });
 
       engine.on('complete', (state: PlaybackState) => {
@@ -273,74 +270,20 @@ export function PlaybackViewer({
       {/* Content Display */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Content Playback</CardTitle>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsContentVisible(!isContentVisible)}
-              >
-                {isContentVisible ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-          </div>
+          <CardTitle className="text-base">Content Playback</CardTitle>
         </CardHeader>
         <CardContent>
-          {isContentVisible ? (
-            <textarea
-              ref={contentRef}
-              className="w-full h-64 p-3 border rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Content will appear here during playback..."
-              readOnly
-              value={currentContent}
-            />
-          ) : (
-            <div className="h-64 flex items-center justify-center text-gray-500 bg-gray-50 rounded-md">
-              Content hidden - click eye icon to show
-            </div>
-          )}
+          <textarea
+            ref={contentRef}
+            className="w-full h-64 p-3 border rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Content will appear here during playback..."
+            readOnly
+            value={currentContent}
+          />
         </CardContent>
       </Card>
 
-      {/* Settings Panel */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center">
-            <Settings className="w-4 h-4 mr-2" />
-            Playback Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Show Cursor</label>
-              <Switch
-                checked={showCursor}
-                onCheckedChange={(checked) => handleSettingsChange('showCursor', checked)}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Highlight Changes</label>
-              <Switch
-                checked={highlightChanges}
-                onCheckedChange={(checked) => handleSettingsChange('highlightChanges', checked)}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Preserve Timing</label>
-              <Switch
-                checked={preserveTiming}
-                onCheckedChange={(checked) => handleSettingsChange('preserveTiming', checked)}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
 
       {/* Analytics Panel (if available) */}
       {analytics && (

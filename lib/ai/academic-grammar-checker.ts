@@ -86,7 +86,7 @@ export async function checkAcademicGrammar(
       : "This is college level academic writing. "
 
     const { object } = await generateObject({
-      model: openai("gpt-4.1-nano"),
+      model: openai("gpt-4o-mini"),
       schema: AcademicSuggestionSchema,
       prompt: `
         You are an expert spelling and grammar checker specializing in ${academicLevel} level writing.

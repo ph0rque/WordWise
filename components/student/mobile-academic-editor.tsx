@@ -42,6 +42,7 @@ import {
   SwipeableCard
 } from './mobile-responsive-layout'
 import { WritingToolsPanel } from './writing-tools-panel'
+import { AutomaticRecorder, AutomaticRecorderRef } from '@/components/keystroke/automatic-recorder'
 
 interface MobileAcademicEditorProps {
   user: SupabaseUser
@@ -190,6 +191,7 @@ export function MobileAcademicEditor({ user, onSignOut, currentDocument, onSave 
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [toolsOpen, setToolsOpen] = useState(false)
+  const recorderRef = useRef<AutomaticRecorderRef>(null)
   
   // Writing goals
   const [activeWritingGoal, setActiveWritingGoal] = useState<{
@@ -288,6 +290,14 @@ export function MobileAcademicEditor({ user, onSignOut, currentDocument, onSave 
 
   const handleSave = async () => {
     if (!onSave) return
+    
+    console.log('💾 Mobile editor manual save triggered, stopping keystroke recording...')
+    
+    // Stop keystroke recording when user manually saves
+    if (recorderRef.current?.isRecording) {
+      await recorderRef.current.stopRecording()
+      console.log('⏹️ Keystroke recording stopped and session saved')
+    }
     
     setSaving(true)
     try {
@@ -647,6 +657,15 @@ ${writingMode === 'draft'
 
   return (
     <MobileResponsiveLayout header={mobileHeader}>
+      {/* Automatic Keystroke Recording - Invisible */}
+      <AutomaticRecorder
+        ref={recorderRef}
+        documentId={currentDocument?.id || 'mobile-essay'}
+        documentTitle={documentTitle}
+        studentName={user.email || 'mobile-student'}
+        textAreaRef={textAreaRef}
+      />
+
       {/* Tools panel overlay */}
       {toolsOpen && (
         <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setToolsOpen(false)}>

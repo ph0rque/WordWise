@@ -9,12 +9,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ConsentNotice, ConsentSettings } from './consent-notice';
 import { PrivacySettings } from './privacy-settings';
+import { KeystrokeRecorder } from '@/lib/keystroke/recorder';
 
 interface RecordingControlsProps {
   documentId: string;
   documentTitle: string;
   studentName: string;
-  textAreaRef: React.RefObject<HTMLTextAreaElement>;
+  textAreaRef: React.RefObject<HTMLTextAreaElement | null>;
   isEnabled?: boolean;
   className?: string;
 }
@@ -54,11 +55,24 @@ export function RecordingControls({
 
   const sessionStartTimeRef = useRef<Date | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const keystrokeRecorderRef = useRef<KeystrokeRecorder | null>(null);
 
   // Load existing consent on mount
   useEffect(() => {
     loadExistingConsent();
   }, []);
+
+  // Cleanup keystroke recorder on unmount
+  useEffect(() => {
+    return () => {
+      if (keystrokeRecorderRef.current && isRecording) {
+        keystrokeRecorderRef.current.stopRecording();
+      }
+      if (statsIntervalRef.current) {
+        clearInterval(statsIntervalRef.current);
+      }
+    };
+  }, [isRecording]);
 
   const loadExistingConsent = async () => {
     try {
@@ -119,7 +133,7 @@ export function RecordingControls({
         // Store consent decision in localStorage
         localStorage.setItem('keystroke-consent-decision', 'accepted');
         localStorage.removeItem('keystroke-consent-declined');
-        console.log('Consent saved successfully');
+
       } else {
         throw new Error('Failed to save consent');
       }
@@ -144,7 +158,7 @@ export function RecordingControls({
       // Store decline decision in localStorage
       localStorage.setItem('keystroke-consent-declined', 'true');
       localStorage.removeItem('keystroke-consent-decision');
-      console.log('User declined keystroke recording');
+      
     } catch (error) {
       console.error('Error saving decline decision:', error);
       // Still record locally even if server save fails
@@ -162,9 +176,27 @@ export function RecordingControls({
     }
 
     try {
-      const sessionId = `session-${documentId}-${Date.now()}`;
-      const startTime = new Date();
+      // Initialize keystroke recorder if not already created
+      if (!keystrokeRecorderRef.current) {
+        keystrokeRecorderRef.current = new KeystrokeRecorder({
+          enableEncryption: true,
+          sampleRate: 10,
+          bufferSize: 100,
+          enablePasteDetection: true,
+          enableSelectionTracking: consentSettings.allowPlaybackReview,
+          enableTimingAnalysis: true,
+          privacyMode: consentSettings.privacyLevel === 'anonymized'
+        });
+      }
 
+      // Start keystroke recording
+      const sessionId = await keystrokeRecorderRef.current.startRecording(
+        studentName, 
+        documentId, 
+        documentTitle
+      );
+
+      const startTime = new Date();
       setIsRecording(true);
       setIsPaused(false);
       sessionStartTimeRef.current = startTime;
@@ -180,7 +212,7 @@ export function RecordingControls({
       // Start stats tracking
       startStatsTracking();
 
-      console.log('Recording started:', sessionId);
+      
     } catch (error) {
       console.error('Error starting recording:', error);
       alert('Failed to start recording. Please try again.');
@@ -189,9 +221,12 @@ export function RecordingControls({
 
   const pauseRecording = async () => {
     try {
+      if (keystrokeRecorderRef.current) {
+        keystrokeRecorderRef.current.pauseRecording();
+      }
       setIsPaused(true);
       setCurrentSession(prev => prev ? { ...prev, status: 'paused' } : null);
-      console.log('Recording paused');
+      
     } catch (error) {
       console.error('Error pausing recording:', error);
     }
@@ -199,9 +234,12 @@ export function RecordingControls({
 
   const resumeRecording = async () => {
     try {
+      if (keystrokeRecorderRef.current) {
+        keystrokeRecorderRef.current.resumeRecording();
+      }
       setIsPaused(false);
       setCurrentSession(prev => prev ? { ...prev, status: 'recording' } : null);
-      console.log('Recording resumed');
+      
     } catch (error) {
       console.error('Error resuming recording:', error);
     }
@@ -209,6 +247,12 @@ export function RecordingControls({
 
   const stopRecording = async () => {
     try {
+      // Stop keystroke recording and get session data
+      let sessionData = null;
+      if (keystrokeRecorderRef.current) {
+        sessionData = await keystrokeRecorderRef.current.stopRecording();
+      }
+
       setIsRecording(false);
       setIsPaused(false);
       setCurrentSession(prev => prev ? { 
@@ -223,7 +267,21 @@ export function RecordingControls({
         statsIntervalRef.current = null;
       }
 
-      console.log('Recording stopped');
+      // Send session data to backend
+      if (sessionData) {
+        try {
+          await fetch('/api/keystroke/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sessionData)
+          });
+
+        } catch (error) {
+          console.error('Error saving session data:', error);
+        }
+      }
+
+      
     } catch (error) {
       console.error('Error stopping recording:', error);
     }
@@ -235,24 +293,25 @@ export function RecordingControls({
     }
 
     statsIntervalRef.current = setInterval(() => {
-      if (sessionStartTimeRef.current) {
+      if (sessionStartTimeRef.current && keystrokeRecorderRef.current) {
         const duration = (Date.now() - sessionStartTimeRef.current.getTime()) / 1000;
-        const words = Math.floor(duration * 2); // Simulate word count
-        const keystrokes = words * 5; // Simulate keystroke count
-        const wpm = Math.floor(words / (duration / 60)) || 0;
+        
+        // Get real stats from keystroke recorder
+        const recorderStats = keystrokeRecorderRef.current.getStatistics();
+        const recordingStatus = keystrokeRecorderRef.current.getRecordingStatus();
         
         setSessionStats({
-          keystrokeCount: keystrokes,
-          wordsTyped: words,
-          averageWPM: wpm,
-          sessionDuration: duration
+          keystrokeCount: recorderStats?.totalEvents || 0,
+          wordsTyped: Math.floor((recorderStats?.totalEvents || 0) / 5), // Estimate words from keystrokes
+          averageWPM: recorderStats?.averageWPM || 0,
+          sessionDuration: Math.floor(duration)
         });
 
         setCurrentSession(prev => prev ? {
           ...prev,
-          keystrokeCount: keystrokes,
-          wordsTyped: words,
-          averageWPM: wpm
+          keystrokeCount: recorderStats?.totalEvents || 0,
+          wordsTyped: Math.floor((recorderStats?.totalEvents || 0) / 5),
+          averageWPM: recorderStats?.averageWPM || 0
         } : null);
       }
     }, 1000);
@@ -268,7 +327,7 @@ export function RecordingControls({
 
       if (response.ok) {
         setConsentSettings(newSettings);
-        console.log('Privacy settings updated');
+
       } else {
         throw new Error('Failed to update settings');
       }
@@ -295,7 +354,7 @@ export function RecordingControls({
         if (isRecording) {
           await stopRecording();
         }
-        console.log('Consent withdrawn');
+
       } else {
         throw new Error('Failed to withdraw consent');
       }
@@ -318,7 +377,7 @@ export function RecordingControls({
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        console.log('Data exported');
+
       } else {
         throw new Error('Failed to export data');
       }
@@ -335,7 +394,7 @@ export function RecordingControls({
       });
 
       if (response.ok) {
-        console.log('Data deletion requested');
+
         alert('Data deletion request submitted. Your data will be removed within 24 hours.');
       } else {
         throw new Error('Failed to request data deletion');

@@ -321,7 +321,7 @@ export default function Page() {
     )
   }
 
-  console.log("User authenticated, showing main app")
+  
 
   // Show role setup prompt if user has no role
   if (showUpgradePrompts) {

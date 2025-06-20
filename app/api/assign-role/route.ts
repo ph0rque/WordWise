@@ -31,33 +31,102 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.replace('Bearer ', '')
 
-    // For updating user metadata, we need to use the Admin API
-    // Since we don't have the service role key, let's return instructions for client-side update
     console.log('Role assignment request:', { userId, role })
     
-    // Verify the user is authenticated by checking their token
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    // Create Supabase client with service role key for database operations
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     
-    if (userError || !user || user.id !== userId) {
-      console.error('User verification failed:', userError)
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+    if (!serviceRoleKey) {
+      // Fallback: Use anon key and let RLS policies handle authorization
+      const supabase = createClient(
+        supabaseUrl,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        }
       )
-    }
+      
+      // Verify the user token first
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+      
+      if (authError || !user) {
+        console.error('Authentication failed:', authError)
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        )
+      }
 
-    // Since updateUser() must be called client-side, return success and let client handle it
-    console.log('User verified, returning success for client-side update')
-    return NextResponse.json({ 
-      success: true, 
-      role,
-      message: 'User verified, proceed with client-side update'
-    })
+      // Verify the user is trying to assign role to themselves (for security)
+      if (user.id !== userId) {
+        console.error('User trying to assign role to different user:', { currentUser: user.id, targetUser: userId })
+        return NextResponse.json(
+          { error: 'Can only assign role to yourself' },
+          { status: 403 }
+        )
+      }
+
+      // Insert into user_roles table
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .upsert({
+          user_id: userId,
+          role: role
+        }, {
+          onConflict: 'user_id'
+        })
+
+      if (roleError) {
+        console.error('Error inserting into user_roles table:', roleError)
+        return NextResponse.json(
+          { error: 'Failed to assign role', details: roleError.message },
+          { status: 500 }
+        )
+      }
+
+      console.log(`Successfully assigned ${role} role to user ${userId}`)
+      return NextResponse.json({ 
+        success: true, 
+        role,
+        message: `Successfully assigned ${role} role`
+      })
+    } else {
+      // Use service role for admin operations
+      const supabase = createClient(
+        supabaseUrl,
+        serviceRoleKey
+      )
+
+      // Insert into user_roles table (bypasses RLS with service role)
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .upsert({
+          user_id: userId,
+          role: role
+        }, {
+          onConflict: 'user_id'
+        })
+
+      if (roleError) {
+        console.error('Error inserting into user_roles table:', roleError)
+        return NextResponse.json(
+          { error: 'Failed to assign role', details: roleError.message },
+          { status: 500 }
+        )
+      }
+
+      console.log(`Successfully assigned ${role} role to user ${userId}`)
+      return NextResponse.json({ 
+        success: true, 
+        role,
+        message: `Successfully assigned ${role} role`
+      })
+    }
   } catch (error) {
     console.error('Error in assign-role API:', error)
     return NextResponse.json(

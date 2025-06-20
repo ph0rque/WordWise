@@ -63,13 +63,13 @@ export class KeystrokeRecorder {
 
   constructor(config: Partial<RecorderConfig> = {}) {
     this.config = {
-      enableEncryption: true,
+      enableEncryption: false, // Disabled for simplicity
       sampleRate: 10, // 10ms precision
       bufferSize: 100,
       enablePasteDetection: true,
       enableSelectionTracking: true,
       enableTimingAnalysis: true,
-      privacyMode: false,
+      privacyMode: false, // Disabled for simplicity
       ...config
     }
   }
@@ -86,7 +86,8 @@ export class KeystrokeRecorder {
       throw new Error('Recording is already in progress')
     }
 
-    const sessionId = `keystroke-${userId}-${documentId}-${Date.now()}`
+    // Generate a proper UUID for the session ID
+    const sessionId = crypto.randomUUID()
     
     this.session = {
       id: sessionId,
@@ -299,7 +300,7 @@ export class KeystrokeRecorder {
       timestamp: Date.now(),
       type: 'input',
       target: this.getTargetIdentifier(target),
-      value: this.config.privacyMode ? this.anonymizeText(target.value) : target.value,
+      value: this.config.privacyMode ? this.anonymizeText(target.value || '') : target.value || '',
       selectionStart: target.selectionStart || 0,
       selectionEnd: target.selectionEnd || 0,
       inputType: inputEvent.inputType,
@@ -559,7 +560,8 @@ export class KeystrokeRecorder {
   /**
    * Anonymize text content for privacy
    */
-  private anonymizeText(text: string): string {
+  private anonymizeText(text: string | null | undefined): string {
+    if (!text) return ''
     return text.replace(/[a-zA-Z]/g, 'X')
                .replace(/[0-9]/g, 'N')
                .replace(/[^\w\s]/g, 'S')

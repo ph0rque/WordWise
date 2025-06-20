@@ -113,26 +113,60 @@ export function EnhancedAuthForm() {
         setAuthStep('complete')
       } else if (data.user && data.session) {
         // No email confirmation required (immediate signup)
-        // Save role to user_roles table immediately
+        // Use API endpoint to assign role (has proper permissions)
         try {
-          const { error: roleError } = await supabase
-            .from('user_roles')
-            .upsert({
-              user_id: data.user.id,
+          const { data: { session } } = await supabase.auth.getSession()
+          const response = await fetch('/api/assign-role', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`,
+            },
+            body: JSON.stringify({
+              userId: data.user.id,
               role: selectedRole
-            }, {
-              onConflict: 'user_id'
-            })
+            }),
+          })
 
-          if (roleError) {
-            console.error('Error saving role to user_roles table:', roleError)
+          if (!response.ok) {
+            const errorData = await response.json()
+            console.error('Error assigning role via API:', errorData)
             setError("Account created but role assignment failed. Please contact support.")
             return
-          } else {
-            console.log(`Successfully assigned ${selectedRole} role to user ${data.user.id} in user_roles table`)
+          }
+
+          console.log(`Successfully assigned ${selectedRole} role to user ${data.user.id}`)
+          
+          // Save keystroke consent for students
+          if (selectedRole === 'student' && isConsented) {
+            try {
+              const consentResponse = await fetch('/api/keystroke/consent/save', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session?.access_token}`,
+                },
+                body: JSON.stringify({
+                  userId: data.user.id,
+                  hasConsented: true,
+                  privacyLevel: 'anonymized',
+                  dataRetentionDays: 30,
+                  allowTeacherReview: true
+                }),
+              })
+
+              if (consentResponse.ok) {
+                console.log('✅ Keystroke consent saved successfully')
+              } else {
+                console.warn('⚠️ Failed to save keystroke consent, but continuing...')
+              }
+            } catch (consentError) {
+              console.warn('⚠️ Error saving keystroke consent:', consentError)
+              // Don't fail the signup process for consent errors
+            }
           }
         } catch (roleTableError) {
-          console.error('Exception saving to user_roles table:', roleTableError)
+          console.error('Exception assigning role via API:', roleTableError)
           setError("Account created but role assignment failed. Please contact support.")
           return
         }
@@ -208,26 +242,31 @@ export function EnhancedAuthForm() {
         console.error("Error updating user role:", error)
         setError("Failed to assign role. Please try again or contact support.")
       } else {
-        // CRITICAL: Also save the role to user_roles table
+        // Use API endpoint to assign role (has proper permissions)
         try {
-          const { error: roleError } = await supabase
-            .from('user_roles')
-            .upsert({
-              user_id: pendingUserId,
+          const { data: { session } } = await supabase.auth.getSession()
+          const response = await fetch('/api/assign-role', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`,
+            },
+            body: JSON.stringify({
+              userId: pendingUserId,
               role: selectedRole
-            }, {
-              onConflict: 'user_id'
-            })
+            }),
+          })
 
-          if (roleError) {
-            console.error('Error saving role to user_roles table:', roleError)
-            setError("Role assignment partially failed. Please contact support.")
+          if (!response.ok) {
+            const errorData = await response.json()
+            console.error('Error assigning role via API:', errorData)
+            setError("Role assignment failed. Please contact support.")
             return
-          } else {
-            console.log(`Successfully assigned ${selectedRole} role to user ${pendingUserId} in user_roles table`)
           }
+
+          console.log(`Successfully assigned ${selectedRole} role to user ${pendingUserId}`)
         } catch (roleTableError) {
-          console.error('Exception saving to user_roles table:', roleTableError)
+          console.error('Exception assigning role via API:', roleTableError)
           setError("Role assignment failed. Please contact support.")
           return
         }
