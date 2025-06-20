@@ -72,13 +72,13 @@ export async function POST(request: NextRequest) {
           privacy_level: 'full',
           start_time: new Date(sessionData.startTime).toISOString(),
           end_time: sessionData.endTime ? new Date(sessionData.endTime).toISOString() : null,
-          duration_ms: sessionData.endTime ? sessionData.endTime - sessionData.startTime : 0,
-          total_keystrokes: sessionData.metadata?.totalKeystrokes || 0,
-          total_characters: sessionData.metadata?.totalCharacters || 0,
-          average_wpm: sessionData.metadata?.averageWPM || 0,
-          pause_count: sessionData.metadata?.pauseCount || 0,
-          backspace_count: sessionData.metadata?.backspaceCount || 0,
-          delete_count: sessionData.metadata?.deleteCount || 0,
+          duration_ms: sessionData.endTime ? Math.min(9223372036854775807, sessionData.endTime - sessionData.startTime) : 0, // BIGINT max
+          total_keystrokes: Math.min(2147483647, sessionData.metadata?.totalKeystrokes || 0), // INTEGER max
+          total_characters: Math.min(2147483647, sessionData.metadata?.totalCharacters || 0), // INTEGER max
+          average_wpm: Math.min(999.99, sessionData.metadata?.averageWPM || 0), // DECIMAL(5,2) max
+          pause_count: Math.min(2147483647, sessionData.metadata?.pauseCount || 0), // INTEGER max
+          backspace_count: Math.min(2147483647, sessionData.metadata?.backspaceCount || 0), // INTEGER max
+          delete_count: Math.min(2147483647, sessionData.metadata?.deleteCount || 0), // INTEGER max
           user_agent: sessionData.metadata?.userAgent || '',
           platform: sessionData.metadata?.platform || '',
           language: sessionData.metadata?.language || '',
@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
           return {
             recording_id: data.id, // Use the database-generated UUID
             event_id: event.id || `event-${index}`,
-            sequence_number: index,
-            timestamp_ms: event.timestamp - sessionData.startTime, // Relative to recording start
+            sequence_number: Math.min(2147483647, index), // INTEGER max
+            timestamp_ms: Math.min(9223372036854775807, event.timestamp - sessionData.startTime), // BIGINT max
             absolute_timestamp: new Date(event.timestamp).toISOString(),
             event_type: event.type,
             // Store event data as JSON in encrypted_data field (but not actually encrypted)

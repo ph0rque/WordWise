@@ -463,9 +463,9 @@ export class KeystrokeRecorder {
     
     if (minutes > 0 && this.session.metadata.totalCharacters > 0) {
       // Rough WPM calculation (assuming 5 characters per word)
-      this.session.metadata.averageWPM = Math.round(
-        (this.session.metadata.totalCharacters / 5) / minutes
-      )
+      const calculatedWPM = (this.session.metadata.totalCharacters / 5) / minutes
+      // Cap WPM at 999 to prevent database overflow (DECIMAL(5,2) max is 999.99)
+      this.session.metadata.averageWPM = Math.min(999, Math.round(calculatedWPM))
     }
   }
 
@@ -480,9 +480,9 @@ export class KeystrokeRecorder {
       const minutes = duration / (1000 * 60)
       
       if (minutes > 0 && this.session.metadata.totalCharacters > 0) {
-        this.session.metadata.averageWPM = Math.round(
-          (this.session.metadata.totalCharacters / 5) / minutes
-        )
+        const calculatedWPM = (this.session.metadata.totalCharacters / 5) / minutes
+        // Cap WPM at 999 to prevent database overflow (DECIMAL(5,2) max is 999.99)
+        this.session.metadata.averageWPM = Math.min(999, Math.round(calculatedWPM))
       }
     }, 5000) // Update every 5 seconds
   }

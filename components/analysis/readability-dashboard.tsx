@@ -48,6 +48,7 @@ interface ReadabilityDashboardProps {
   trends?: ReadabilityTrend[]
   targetGradeLevel?: number
   isLoading?: boolean
+  text?: string
   onAnalyze?: (text: string) => void
   onRefresh?: () => void
 }
@@ -67,10 +68,97 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
   trends = [],
   targetGradeLevel = 12,
   isLoading = false,
+  text,
   onAnalyze,
   onRefresh
 }) => {
   const [showDetails, setShowDetails] = useState(false)
+  const [calculatedAnalysis, setCalculatedAnalysis] = useState<ReadabilityAnalysis | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+
+  // Calculate analysis when text changes
+  useEffect(() => {
+    if (text && text.trim().length > 0) {
+      analyzeText(text)
+    } else {
+      setCalculatedAnalysis(null)
+    }
+  }, [text])
+
+  const analyzeText = async (textToAnalyze: string) => {
+    if (!textToAnalyze.trim()) return
+
+    setAnalyzing(true)
+    try {
+      const response = await fetch('/api/analysis/readability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: textToAnalyze,
+          targetLevel: 'high-school',
+          includeMetrics: false
+        })
+      })
+
+             if (response.ok) {
+        const result = await response.json()
+        // Convert the API response to our ReadabilityAnalysis format
+        const convertedAnalysis: ReadabilityAnalysis = {
+          metrics: {
+            fleschScore: result.metrics.fleschReadingEase,
+            fleschKincaidGrade: result.metrics.fleschKincaidGradeLevel,
+            colemanLiauIndex: result.metrics.colemanLiauIndex,
+            automatedReadabilityIndex: result.metrics.automatedReadabilityIndex,
+            gunningFogIndex: result.metrics.gunningFogIndex,
+            smogIndex: 0, // Not provided by API
+            averageWordsPerSentence: result.metrics.averageWordsPerSentence,
+            averageSyllablesPerWord: result.metrics.averageSyllablesPerWord,
+            complexWordsPercentage: result.metrics.complexWordPercentage,
+            passiveVoicePercentage: 0, // Not provided by API
+            sentenceVariety: 0, // Not provided by API
+            readingTimeMinutes: Math.ceil(result.metrics.wordCount / 200) // Estimate 200 words per minute
+          },
+          overallGrade: result.metrics.recommendedGradeLevel,
+          difficulty: getDifficultyFromGrade(result.metrics.recommendedGradeLevel),
+          targetAudience: getTargetAudience(result.metrics.recommendedGradeLevel),
+          strengths: result.strengths || [],
+          improvements: result.improvementAreas || [],
+          recommendations: result.recommendations || [],
+          score: Math.round(Math.max(0, result.metrics.fleschReadingEase)), // Ensure positive score
+          wordCount: result.metrics.wordCount,
+          sentenceCount: result.metrics.sentenceCount,
+          paragraphCount: result.metrics.paragraphCount
+        }
+        setCalculatedAnalysis(convertedAnalysis)
+      } else {
+        console.error('Failed to analyze readability')
+        setCalculatedAnalysis(null)
+      }
+    } catch (error) {
+      console.error('Error analyzing readability:', error)
+      setCalculatedAnalysis(null)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const getDifficultyFromGrade = (grade: number): ReadabilityAnalysis['difficulty'] => {
+    if (grade <= 6) return 'Very Easy'
+    if (grade <= 8) return 'Easy'
+    if (grade <= 10) return 'Fairly Easy'
+    if (grade <= 12) return 'Standard'
+    if (grade <= 14) return 'Fairly Difficult'
+    if (grade <= 16) return 'Difficult'
+    return 'Very Difficult'
+  }
+
+  const getTargetAudience = (grade: number): string => {
+    if (grade <= 6) return 'Elementary Students (Grades K-6)'
+    if (grade <= 8) return 'Middle School Students (Grades 7-8)'
+    if (grade <= 12) return 'High School Students (Grades 9-12)'
+    if (grade <= 16) return 'College Students'
+    return 'Graduate Level'
+  }
 
   // Sample data for demonstration when no real data is provided
   const sampleAnalysis: ReadabilityAnalysis = {
@@ -112,7 +200,7 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
     paragraphCount: 4
   }
 
-  const currentAnalysis = analysis || sampleAnalysis
+  const currentAnalysis = analysis || calculatedAnalysis || sampleAnalysis
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return '#10b981'
@@ -121,7 +209,7 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
     return '#ef4444'
   }
 
-  if (isLoading) {
+  if (isLoading || analyzing) {
     return (
       <Card>
         <CardHeader className="pb-3">

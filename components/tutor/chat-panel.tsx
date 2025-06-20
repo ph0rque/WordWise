@@ -11,11 +11,7 @@ import {
   Send, 
   RotateCcw, 
   Download, 
-  Lightbulb,
-  MessageSquare,
   AlertTriangle,
-  Sparkles,
-  BookOpen,
   HelpCircle
 } from 'lucide-react'
 import { ChatMessageComponent, type ChatMessage } from './chat-message'
@@ -39,27 +35,9 @@ interface ChatPanelProps {
   className?: string
 }
 
-// Predefined starter questions for students
-const STARTER_QUESTIONS = [
-  "How can I improve the structure of my essay?",
-  "What makes a strong thesis statement?",
-  "How do I write better topic sentences?",
-  "Can you help me understand this writing assignment?",
-  "What are some good transition words I can use?",
-  "How do I cite sources properly?",
-  "What's the difference between active and passive voice?",
-  "How can I make my writing more engaging?"
-]
 
-// Educational prompts that encourage critical thinking
-const CRITICAL_THINKING_PROMPTS = [
-  "What evidence supports your main argument?",
-  "How might someone disagree with your position?",
-  "What are the implications of your conclusion?",
-  "Can you think of a real-world example?",
-  "What questions does your essay raise?",
-  "How does this connect to what you've learned before?"
-]
+
+
 
 export function ChatPanel({ 
   documentId, 
@@ -75,7 +53,6 @@ export function ChatPanel({
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
-  const [showStarters, setShowStarters] = useState(true)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -94,8 +71,7 @@ export function ChatPanel({
         timestamp: new Date(),
         status: 'delivered',
         metadata: {
-          confidence: 95,
-          suggestedQuestions: STARTER_QUESTIONS.slice(0, 3)
+          confidence: 95
         }
       }
       
@@ -126,12 +102,7 @@ export function ChatPanel({
     console.log(`Message ${messageId} marked as ${feedback}`)
   }, [])
 
-  // Handle clicking on suggested questions
-  const handleQuestionClick = useCallback((question: string) => {
-    setInputMessage(question)
-    setShowStarters(false)
-    inputRef.current?.focus()
-  }, [])
+
 
   // Send message to AI tutor
   const sendMessage = useCallback(async () => {
@@ -149,7 +120,6 @@ export function ChatPanel({
     setInputMessage('')
     setIsLoading(true)
     setError(null)
-    setShowStarters(false)
 
     try {
       const response = await fetch('/api/ai/essay-tutor-chat', {
@@ -182,7 +152,6 @@ export function ChatPanel({
         status: 'delivered',
         metadata: {
           confidence: data.confidence || 85,
-          suggestedQuestions: data.suggestedQuestions || [],
           relatedConcepts: data.relatedConcepts || []
         }
       }
@@ -218,7 +187,6 @@ export function ChatPanel({
   // Clear chat history
   const clearChat = useCallback(() => {
     setMessages([])
-    setShowStarters(true)
     setError(null)
     // Re-add welcome message
     const welcomeMessage: ChatMessage = {
@@ -228,8 +196,7 @@ export function ChatPanel({
       timestamp: new Date(),
       status: 'delivered',
       metadata: {
-        confidence: 95,
-        suggestedQuestions: STARTER_QUESTIONS.slice(0, 3)
+        confidence: 95
       }
     }
     setMessages([welcomeMessage])
@@ -322,7 +289,6 @@ export function ChatPanel({
                 message={message}
                 onCopy={handleCopyMessage}
                 onFeedback={handleMessageFeedback}
-                onQuestionClick={handleQuestionClick}
               />
             ))}
             
@@ -347,29 +313,7 @@ export function ChatPanel({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Starter Questions */}
-          {showStarters && messages.length <= 1 && (
-            <div className="p-4 border-t bg-gray-50">
-              <div className="flex items-center gap-2 mb-3">
-                <Lightbulb className="h-4 w-4 text-amber-500" />
-                <span className="text-sm font-medium text-gray-700">Quick start questions:</span>
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {STARTER_QUESTIONS.slice(0, 4).map((question, index) => (
-                  <Button
-                    key={index}
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto p-2 text-xs text-left justify-start hover:bg-blue-50 text-gray-600"
-                    onClick={() => handleQuestionClick(question)}
-                  >
-                    <MessageSquare className="h-3 w-3 mr-2 flex-shrink-0" />
-                    {question}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           {/* Input Area */}
           <div className="flex-shrink-0 p-4 border-t bg-white">
@@ -380,7 +324,7 @@ export function ChatPanel({
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask me about your writing... (Cmd/Ctrl + Enter to send)"
+                  placeholder="Ask me about your writing..."
                   className="min-h-[60px] max-h-[120px] resize-none"
                   disabled={isLoading}
                 />
@@ -398,7 +342,7 @@ export function ChatPanel({
               <Button
                 onClick={sendMessage}
                 disabled={!inputMessage.trim() || isLoading || inputMessage.length > 500}
-                className="self-end"
+                className="self-start"
                 size="sm"
               >
                 {isLoading ? (

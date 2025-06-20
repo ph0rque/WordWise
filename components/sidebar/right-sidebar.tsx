@@ -51,10 +51,18 @@ export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebar
           </TabsTrigger>
         </TabsList>
         <TabsContent value="analysis" className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 data-[state=active]:flex data-[state=active]:flex-col">
-          <div className="space-y-4">
-            <ReadabilityDashboard analysis={undefined} isLoading={!document} />
-            <VocabularyEnhancer text={document?.content} isLoading={!document} />
-          </div>
+          {document ? (
+            <div className="space-y-4">
+              <ReadabilityDashboard text={document.content} isLoading={false} />
+              <VocabularyEnhancer text={document.content} isLoading={false} />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center text-sm text-gray-500">
+                Select a document to see the analysis.
+              </div>
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="ai-tutor" className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col">
           {document && canUseAITutor ? (

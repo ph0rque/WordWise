@@ -152,7 +152,6 @@ export interface ChatMessage {
   feedback?: 'helpful' | 'not_helpful' | null
   metadata?: {
     confidence?: number
-    suggestedQuestions?: string[]
     relatedConcepts?: string[]
     wordCount?: number
   }
@@ -162,7 +161,6 @@ interface ChatMessageProps {
   message: ChatMessage
   onCopy?: (content: string) => void
   onFeedback?: (messageId: string, feedback: 'helpful' | 'not_helpful') => void
-  onQuestionClick?: (question: string) => void
   className?: string
 }
 
@@ -170,7 +168,6 @@ export function ChatMessageComponent({
   message, 
   onCopy, 
   onFeedback, 
-  onQuestionClick,
   className = '' 
 }: ChatMessageProps) {
   const isUser = message.type === 'user'
@@ -263,25 +260,7 @@ export function ChatMessageComponent({
                   </div>
                 )}
 
-                {/* Suggested follow-up questions */}
-                {message.metadata.suggestedQuestions && message.metadata.suggestedQuestions.length > 0 && (
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500">You might also ask:</span>
-                    <div className="space-y-1">
-                      {message.metadata.suggestedQuestions.map((question, index) => (
-                        <Button
-                          key={index}
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto p-2 text-xs text-left justify-start hover:bg-blue-50"
-                          onClick={() => onQuestionClick?.(question)}
-                        >
-                          "{question}"
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+
 
                 {/* Related concepts */}
                 {message.metadata.relatedConcepts && message.metadata.relatedConcepts.length > 0 && (

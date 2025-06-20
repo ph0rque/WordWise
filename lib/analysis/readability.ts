@@ -152,7 +152,14 @@ function calculateTextStatistics(text: string): {
   // Clean and split text
   const cleanText = text.replace(/\s+/g, ' ').trim()
   const words = cleanText.split(/\s+/).filter(word => word.length > 0)
-  const sentences = text.split(/[.!?]+/).filter(sentence => sentence.trim().length > 0)
+  
+  // Improved sentence splitting - handle ellipsis and ensure proper boundaries
+  const sentences = text
+    .replace(/\.{3,}/g, '.')  // Replace ellipsis with single period
+    .split(/[.!?]+/)
+    .filter(sentence => sentence.trim().length > 0)
+    .filter(sentence => sentence.trim().match(/\w/)) // Must contain at least one word character
+  
   const paragraphs = text.split(/\n\s*\n/).filter(para => para.trim().length > 0)
   
   // Calculate syllables
