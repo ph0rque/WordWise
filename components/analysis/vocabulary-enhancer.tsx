@@ -4,18 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   BookOpen, 
-  TrendingUp, 
-  Target, 
-  Lightbulb,
-  RefreshCw,
-  ChevronRight,
-  Star,
   AlertCircle,
-  CheckCircle,
-  ArrowRight,
   Zap
 } from 'lucide-react'
 
@@ -67,51 +58,58 @@ const SAMPLE_ENHANCEMENT: VocabularyEnhancement = {
   analysis: {
     totalWords: 250,
     uniqueWords: 180,
-    academicWords: 45,
+    academicWords: 0,
     informalWords: 8,
     repetitiveWords: ['really', 'very', 'good'],
-    vocabularyDiversity: 72,
-    academicLevel: 'high-school',
+    vocabularyDiversity: 34,
+    academicLevel: 'elementary',
     suggestions: [
       {
-        originalWord: 'really',
-        suggestions: ['significantly', 'considerably', 'substantially'],
-        context: 'This is really important for understanding the concept.',
+        originalWord: 'Essay Structure',
+        suggestions: ['Add topic sentences', 'Strengthen transitions', 'Improve conclusion'],
+        context: 'Your essay would benefit from clearer paragraph structure and stronger connecting ideas.',
         reason: 'academic-upgrade',
         priority: 'high',
-        explanation: 'Replace informal intensifier with academic alternative',
-        position: { start: 8, end: 14 }
+        explanation: 'Enhance overall essay organization and flow',
+        position: { start: 0, end: 0 }
       },
       {
-        originalWord: 'good',
-        suggestions: ['effective', 'beneficial', 'advantageous'],
-        context: 'This method is good for solving the problem.',
+        originalWord: 'Academic Vocabulary',
+        suggestions: ['Use formal language', 'Add subject-specific terms', 'Replace casual words'],
+        context: 'Consider elevating your vocabulary to match academic writing standards.',
+        reason: 'formality',
+        priority: 'high',
+        explanation: 'Strengthen academic tone and precision',
+        position: { start: 0, end: 0 }
+      },
+      {
+        originalWord: 'Evidence & Examples',
+        suggestions: ['Add supporting details', 'Include specific examples', 'Cite relevant sources'],
+        context: 'Your arguments would be stronger with more concrete evidence and examples.',
         reason: 'precision',
         priority: 'medium',
-        explanation: 'Use more precise academic vocabulary',
-        position: { start: 15, end: 19 }
+        explanation: 'Strengthen arguments with better support',
+        position: { start: 0, end: 0 }
       },
       {
-        originalWord: 'big',
-        suggestions: ['substantial', 'significant', 'considerable'],
-        context: 'There was a big difference in the results.',
-        reason: 'formality',
+        originalWord: 'Sentence Variety',
+        suggestions: ['Vary sentence length', 'Use complex sentences', 'Improve rhythm'],
+        context: 'Mix short and long sentences to create better flow and engagement.',
+        reason: 'variety',
         priority: 'medium',
-        explanation: 'Replace casual language with formal academic terms',
-        position: { start: 12, end: 15 }
+        explanation: 'Enhance readability and writing style',
+        position: { start: 0, end: 0 }
       }
     ]
   },
-  overallScore: 75,
+  overallScore: 25,
   strengths: [
-    'Good variety in sentence structure',
-    'Appropriate use of transition words',
-    'Strong academic vocabulary foundation'
+    'Good sentence structure',
+    'Appropriate paragraph length'
   ],
   improvementAreas: [
-    'Reduce use of informal intensifiers',
-    'Increase precision in word choice',
-    'Vary vocabulary to avoid repetition'
+    'Limited academic vocabulary usage',
+    'Limited vocabulary variety'
   ],
   recommendations: [
     'Replace informal words with academic alternatives',
@@ -130,14 +128,15 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
   className = ''
 }) => {
   const [enhancement, setEnhancement] = useState<VocabularyEnhancement | null>(null)
-  const [appliedSuggestions, setAppliedSuggestions] = useState<Set<string>>(new Set())
 
   // Analyze vocabulary when text changes
   useEffect(() => {
     if (text && text.length > 0) {
+      console.log('Analyzing vocabulary for text:', text.substring(0, 100) + '...')
       analyzeVocabulary(text)
     } else {
       // Use sample data for demonstration
+      console.log('Using sample vocabulary data')
       setEnhancement(SAMPLE_ENHANCEMENT)
     }
   }, [text, targetLevel])
@@ -158,7 +157,9 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
 
       if (response.ok) {
         const result = await response.json()
-        setEnhancement(result)
+        // Sanitize the result to remove any HTML markup
+        const sanitizedResult = sanitizeEnhancementData(result)
+        setEnhancement(sanitizedResult)
       } else {
         console.error('Failed to analyze vocabulary')
         setEnhancement(SAMPLE_ENHANCEMENT) // Fallback to sample data
@@ -169,79 +170,66 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
     }
   }, [targetLevel])
 
-  const handleApplySuggestion = (suggestion: VocabularySuggestion, selectedWord: string) => {
-    // Mark as applied
-    const key = `${suggestion.originalWord}-${suggestion.position.start}`
-    setAppliedSuggestions(prev => new Set([...prev, key]))
-    
-    // Call parent handler
-    if (onApplySuggestion) {
-      onApplySuggestion(suggestion, selectedWord)
+  // Function to sanitize enhancement data and remove HTML markup
+  const sanitizeEnhancementData = (data: VocabularyEnhancement): VocabularyEnhancement => {
+    const stripHtml = (text: string): string => {
+      if (!text || typeof text !== 'string') return ''
+      return text.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, '').trim()
+    }
+
+    try {
+      console.log('Sanitizing vocabulary data:', data)
+      
+      const sanitized = {
+        ...data,
+        analysis: {
+          ...data.analysis,
+          suggestions: data.analysis.suggestions.map(suggestion => ({
+            ...suggestion,
+            originalWord: stripHtml(suggestion.originalWord),
+            suggestions: suggestion.suggestions.map(s => stripHtml(s)),
+            context: stripHtml(suggestion.context),
+            explanation: stripHtml(suggestion.explanation)
+          }))
+        },
+        strengths: data.strengths.map(s => stripHtml(s)),
+        improvementAreas: data.improvementAreas.map(s => stripHtml(s)),
+        recommendations: data.recommendations.map(s => stripHtml(s))
+      }
+      
+      console.log('Sanitized vocabulary data:', sanitized)
+      return sanitized
+    } catch (error) {
+      console.error('Error sanitizing vocabulary data:', error)
+      // Return sample data as fallback
+      return SAMPLE_ENHANCEMENT
     }
   }
 
-  const isSuggestionApplied = (suggestion: VocabularySuggestion): boolean => {
-    const key = `${suggestion.originalWord}-${suggestion.position.start}`
-    return appliedSuggestions.has(key)
-  }
 
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'high': return <AlertCircle className="h-4 w-4 text-red-500" />
-      case 'medium': return <Star className="h-4 w-4 text-yellow-500" />
-      case 'low': return <Lightbulb className="h-4 w-4 text-blue-500" />
-      default: return <Lightbulb className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  const getReasonLabel = (reason: string) => {
-    switch (reason) {
-      case 'academic-upgrade': return 'Academic Style'
-      case 'precision': return 'Precision'
-      case 'formality': return 'Formality'
-      case 'variety': return 'Variety'
-      case 'clarity': return 'Clarity'
-      default: return 'Enhancement'
-    }
-  }
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600'
-    if (score >= 60) return 'text-blue-600'
-    if (score >= 40) return 'text-yellow-600'
-    return 'text-red-600'
+    if (score >= 80) return '#10b981'
+    if (score >= 60) return '#3b82f6'
+    if (score >= 40) return '#f59e0b'
+    return '#ef4444'
   }
 
-  const getScoreBadgeColor = (score: number) => {
-    if (score >= 80) return 'bg-green-100 text-green-800'
-    if (score >= 60) return 'bg-blue-100 text-blue-800'
-    if (score >= 40) return 'bg-yellow-100 text-yellow-800'
-    return 'bg-red-100 text-red-800'
+  const truncateWord = (word: string, maxLength: number = 12) => {
+    if (word.length <= maxLength) return word
+    return word.substring(0, maxLength) + '...'
   }
 
   if (isLoading) {
     return (
       <Card className={`w-full ${className}`}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            Vocabulary Enhancement
-          </CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Vocabulary Enhancement</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="animate-pulse">
-                  <div className="h-20 bg-gray-200 rounded"></div>
-                </div>
-              ))}
-            </div>
+        <CardContent className="space-y-3">
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+            <div className="h-8 bg-gray-200 rounded w-1/2"></div>
           </div>
         </CardContent>
       </Card>
@@ -251,20 +239,17 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
   if (!enhancement) {
     return (
       <Card className={`w-full ${className}`}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            Vocabulary Enhancement
-          </CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Vocabulary Enhancement</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-4">
-              Start typing to get vocabulary enhancement suggestions
+          <div className="text-center py-4">
+            <BookOpen className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-600 mb-3">
+              Start typing to get vocabulary suggestions
             </p>
             {onAnalyze && (
-              <Button onClick={onAnalyze} variant="outline">
+              <Button onClick={onAnalyze} variant="outline" size="sm">
                 <Zap className="h-4 w-4 mr-2" />
                 Analyze Text
               </Button>
@@ -277,338 +262,83 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
 
   return (
     <Card className={`w-full ${className}`}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            Vocabulary Enhancement
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Badge className={getScoreBadgeColor(enhancement.overallScore)}>
-              Score: {enhancement.overallScore}/100
-            </Badge>
-            {onRefresh && (
-              <Button variant="outline" size="sm" onClick={onRefresh}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            )}
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Vocabulary Enhancement</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Key Metrics - Compact Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="text-center space-y-1">
+            <div className="text-sm text-muted-foreground">Overall Score</div>
+            <div className="text-2xl font-bold" style={{ color: getScoreColor(enhancement.overallScore) }}>
+              {enhancement.overallScore}
+            </div>
+          </div>
+          
+          <div className="text-center space-y-1">
+            <div className="text-sm text-muted-foreground">Academic Words</div>
+            <div className="text-2xl font-bold text-green-600">
+              {enhancement.analysis.academicWords}
+            </div>
           </div>
         </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="suggestions">
-              Suggestions ({enhancement.analysis.suggestions.length})
-            </TabsTrigger>
-            <TabsTrigger value="metrics">Metrics</TabsTrigger>
-            <TabsTrigger value="recommendations">Tips</TabsTrigger>
-          </TabsList>
 
-          <TabsContent value="overview" className="space-y-4">
-            {/* Key Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Overall Score</p>
-                      <p className={`text-2xl font-bold ${getScoreColor(enhancement.overallScore)}`}>
-                        {enhancement.overallScore}
-                      </p>
-                    </div>
-                    <TrendingUp className="h-8 w-8 text-blue-500" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Academic Words</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        {enhancement.analysis.academicWords}
-                      </p>
-                    </div>
-                    <Target className="h-8 w-8 text-green-500" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Diversity</p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {enhancement.analysis.vocabularyDiversity}%
-                      </p>
-                    </div>
-                    <Star className="h-8 w-8 text-blue-500" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Level</p>
-                      <p className="text-lg font-semibold text-purple-600 capitalize">
-                        {enhancement.analysis.academicLevel.replace('-', ' ')}
-                      </p>
-                    </div>
-                    <BookOpen className="h-8 w-8 text-purple-500" />
-                  </div>
-                </CardContent>
-              </Card>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="text-center space-y-1">
+            <div className="text-sm text-muted-foreground">Diversity</div>
+            <div className="text-lg font-semibold text-blue-600">
+              {enhancement.analysis.vocabularyDiversity}%
             </div>
-
-            {/* Strengths and Areas for Improvement */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                    Strengths
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {enhancement.strengths.map((strength, index) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <div className="h-2 w-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
-                        <span className="text-sm">{strength}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    Areas for Improvement
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {enhancement.improvementAreas.map((area, index) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <div className="h-2 w-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0" />
-                        <span className="text-sm">{area}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+          </div>
+          
+          <div className="text-center space-y-1">
+            <div className="text-sm text-muted-foreground">Level</div>
+            <div className="text-sm font-semibold text-purple-600 capitalize">
+              {enhancement.analysis.academicLevel.replace('-', ' ')}
             </div>
-          </TabsContent>
+          </div>
+        </div>
 
-          <TabsContent value="suggestions" className="space-y-4">
-            {enhancement.analysis.suggestions.length === 0 ? (
-              <div className="text-center py-8">
-                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                <p className="text-gray-600">
-                  Great! No vocabulary improvements needed at this time.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {enhancement.analysis.suggestions.map((suggestion, index) => (
-                  <Card key={index} className={`border-l-4 ${
-                    suggestion.priority === 'high' ? 'border-l-red-500' :
-                    suggestion.priority === 'medium' ? 'border-l-yellow-500' :
-                    'border-l-blue-500'
-                  } ${isSuggestionApplied(suggestion) ? 'opacity-50' : ''}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            {getPriorityIcon(suggestion.priority)}
-                            <Badge variant="outline">
-                              {getReasonLabel(suggestion.reason)}
-                            </Badge>
-                            <Badge variant="secondary" className="capitalize">
-                              {suggestion.priority} Priority
-                            </Badge>
-                            {isSuggestionApplied(suggestion) && (
-                              <Badge className="bg-green-100 text-green-800">
-                                Applied
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <div className="mb-3">
-                            <p className="text-sm text-gray-600 mb-1">Replace:</p>
-                            <span className="bg-red-100 text-red-800 px-2 py-1 rounded font-mono text-sm">
-                              {suggestion.originalWord}
-                            </span>
-                          </div>
 
-                          <div className="mb-3">
-                            <p className="text-sm text-gray-600 mb-2">With:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {suggestion.suggestions.map((word, wordIndex) => (
-                                <Button
-                                  key={wordIndex}
-                                  variant="outline"
-                                  size="sm"
-                                  className="bg-green-50 border-green-200 hover:bg-green-100"
-                                  onClick={() => handleApplySuggestion(suggestion, word)}
-                                  disabled={isSuggestionApplied(suggestion)}
-                                >
-                                  {word}
-                                  <ArrowRight className="h-3 w-3 ml-1" />
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
 
-                          <div className="text-sm text-gray-600 mb-2">
-                            <strong>Context:</strong> "{suggestion.context}"
-                          </div>
-                          
-                          <div className="text-sm text-gray-600">
-                            <strong>Why:</strong> {suggestion.explanation}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="metrics" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Word Statistics</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span>Total Words:</span>
-                    <span className="font-semibold">{enhancement.analysis.totalWords}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Unique Words:</span>
-                    <span className="font-semibold">{enhancement.analysis.uniqueWords}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Academic Words:</span>
-                    <span className="font-semibold text-green-600">{enhancement.analysis.academicWords}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Informal Words:</span>
-                    <span className="font-semibold text-red-600">{enhancement.analysis.informalWords}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Quality Metrics</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Vocabulary Diversity:</span>
-                      <span className="font-semibold">{enhancement.analysis.vocabularyDiversity}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${enhancement.analysis.vocabularyDiversity}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Academic Level:</span>
-                      <span className="font-semibold capitalize">
-                        {enhancement.analysis.academicLevel.replace('-', ' ')}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+        {/* Quick Stats */}
+        <div className="border-t pt-3">
+          <div className="text-sm font-medium mb-2">Quick Stats</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total:</span>
+              <span className="font-medium">{enhancement.analysis.totalWords}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Unique:</span>
+              <span className="font-medium">{enhancement.analysis.uniqueWords}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Informal:</span>
+              <span className="font-medium text-red-600">{enhancement.analysis.informalWords}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Repetitive:</span>
+              <span className="font-medium text-yellow-600">{enhancement.analysis.repetitiveWords.length}</span>
+            </div>
+          </div>
+        </div>
 
-            {enhancement.analysis.repetitiveWords.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Repetitive Words</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {enhancement.analysis.repetitiveWords.map((word, index) => (
-                      <Badge key={index} variant="outline" className="bg-yellow-50">
-                        {word}
-                      </Badge>
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Consider varying these frequently used words for better writing flow.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="recommendations" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Lightbulb className="h-5 w-5 text-yellow-500" />
-                  Writing Tips
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {enhancement.recommendations.map((recommendation, index) => (
-                    <li key={index} className="flex items-start gap-3">
-                      <ChevronRight className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm">{recommendation}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Academic Writing Guidelines</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2">Word Choice</h4>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      <li>• Use precise, specific vocabulary instead of general terms</li>
-                      <li>• Replace informal language with academic alternatives</li>
-                      <li>• Vary your word choice to avoid repetition</li>
-                    </ul>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2">Academic Style</h4>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      <li>• Use formal language appropriate for academic writing</li>
-                      <li>• Incorporate discipline-specific terminology</li>
-                      <li>• Use transition words to connect ideas clearly</li>
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        {/* Improvement Areas */}
+        <div className="border-t pt-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="h-4 w-4 text-orange-500" />
+            <span className="text-sm font-medium">Areas for Improvement</span>
+          </div>
+          <ul className="space-y-1">
+            {enhancement.improvementAreas.slice(0, 2).map((area, index) => (
+              <li key={index} className="text-xs text-muted-foreground flex items-start gap-1">
+                <span className="text-orange-500 flex-shrink-0">•</span>
+                {area}
+              </li>
+            ))}
+          </ul>
+        </div>
       </CardContent>
     </Card>
   )

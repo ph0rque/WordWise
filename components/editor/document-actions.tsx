@@ -30,6 +30,19 @@ export function DocumentActions({ onNew, onSave, onDelete, onSwitch, isSaving, d
 
   return (
     <>
+      {/* Save button - now always visible */}
+      <Button
+        onClick={onSave}
+        disabled={isSaving}
+        size="sm"
+        variant="outline"
+        className="flex items-center gap-2"
+      >
+        <Save className="h-4 w-4" />
+        <span>{isSaving ? "Saving..." : "Save"}</span>
+      </Button>
+
+      {/* Three dots dropdown menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon">
@@ -44,10 +57,6 @@ export function DocumentActions({ onNew, onSave, onDelete, onSwitch, isSaving, d
           <DropdownMenuItem onClick={onSwitch}>
             <List className="mr-2 h-4 w-4" />
             <span>Switch Document</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onSave} disabled={isSaving}>
-            <Save className="mr-2 h-4 w-4" />
-            <span>{isSaving ? "Saving..." : "Save"}</span>
           </DropdownMenuItem>
           
           {/* Show My Sessions only for students */}

@@ -58,7 +58,30 @@ WordWise is a functional grammar-checking application with core features impleme
 ## Active Development Focus
 
 ### Recently Completed (Latest Update)
-1. **Keystroke Recording Enhancement** ✅ **JUST COMPLETED**
+1. **Independent Right Panel Scrolling** ✅ **JUST COMPLETED**
+   - **Fixed Scrolling Issue**: Right panel now scrolls independently of the main editor area
+   - **Height Constraints**: Added proper `max-h-screen` and `min-h-0` classes for flex container behavior
+   - **Layout Optimization**: Used flexbox with `flex-shrink-0` for fixed header/tabs and `flex-1` for scrollable content
+   - **Accessibility Improvement**: Users can now access all analysis content regardless of text area size
+   - **Better UX**: No more content cutoff when the editor area is small or resized
+   - **Cross-Device Support**: Scrolling works consistently across different screen sizes and orientations
+   - **Document Manager**: Positioned document manager as non-scrollable footer below the scrollable analysis panel
+
+2. **Always-Visible Save Button** ✅ **COMPLETED**
+   - **Enhanced Accessibility**: Save button moved out of three-dots dropdown menu to be always visible
+   - **Improved UX**: Save action now appears as a dedicated button to the left of the three-dots menu
+   - **Better Visual Hierarchy**: Critical save functionality no longer hidden behind secondary menu
+   - **Consistent Styling**: Save button uses outline variant with loading state indicator
+   - **Streamlined Workflow**: Students can now save documents more quickly without menu navigation
+
+2. **Collapsible Right Sidebar for Focused Writing** ✅ **COMPLETED**
+   - **Distraction-Free Mode**: Right sidebar (writing tools, analysis) can now be collapsed for concentrated essay writing
+   - **Floating Expand Button**: When collapsed, a subtle floating button appears in the top-right for easy re-expansion
+   - **Dynamic Layout**: Main editor expands to full width when sidebar is collapsed (responsive grid)
+   - **Visual Feedback**: Clear collapse/expand icons with helpful tooltips
+   - **Enhanced Writing Experience**: Students can now toggle between full-featured mode and minimal writing mode
+
+2. **Keystroke Recording Enhancement** ✅ **COMPLETED**
    - **Automatic Recording**: Recording now happens invisibly when students start typing
    - **One-time Consent**: Privacy consent moved to user onboarding (happens just once)  
    - **Student Self-Access**: Students can now view their own writing session recordings

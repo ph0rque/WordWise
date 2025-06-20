@@ -17,6 +17,10 @@
 - **Text Statistics**: Word count, character count, readability metrics
 - **Settings Panel**: Configurable grammar checking options
 - **Theme Support**: Dark/light mode with next-themes
+- **Collapsible Right Sidebar**: ✅ **NEW** - Students can collapse writing tools for distraction-free concentrated writing
+- **Always-Visible Save Button**: ✅ **NEW** - Save action moved from dropdown to dedicated button for better accessibility
+- **Simplified Readability Dashboard**: ✅ **NEW** - Streamlined analysis panel to fit sidebar space with essential metrics only
+- **Independent Right Panel Scrolling**: ✅ **NEW** - Fixed scrolling so users can access all content regardless of editor size
 
 ### Authentication & Data
 - **User Authentication**: Complete Supabase Auth integration with role-based access

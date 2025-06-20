@@ -13,7 +13,7 @@ import { RoleBasedHeader, RoleBasedNotifications } from "@/components/navigation
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { GraduationCap, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
+import { GraduationCap, AlertCircle, RefreshCw, Loader2, PanelRight } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -56,6 +56,7 @@ export default function Page() {
   const [mounted, setMounted] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [hasDocuments, setHasDocuments] = useState(false)
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
 
   // Role-based features - only use after component mounts to avoid hydration issues
   const roleFeatures = useRoleBasedFeatures()
@@ -401,7 +402,10 @@ export default function Page() {
           />
         </header>
         <div className="flex flex-1 overflow-hidden">
-          <div className="container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 md:grid-cols-[3fr_1.5fr]">
+          <div className={cn(
+            "container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4",
+            isRightSidebarCollapsed ? "md:grid-cols-1" : "md:grid-cols-[3fr_1.5fr]"
+          )}>
             <main className="flex flex-col gap-4">
               {currentDocument ? (
                 <TextEditor
@@ -431,19 +435,44 @@ export default function Page() {
                 </div>
               )}
             </main>
-            <aside className="hidden md:flex md:flex-col md:gap-4">
-              <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
-              
-              {/* Document Manager positioned under the sidebar */}
-              <DocumentManager
-                onSelectDocument={handleSelectDocument}
-                onNewDocument={setCurrentDocument}
-                currentDocumentId={currentDocument?.id}
-                refreshDocumentsFlag={refreshDocumentsFlag}
-                onDocumentsLoaded={setHasDocuments}
-              />
-            </aside>
+            {!isRightSidebarCollapsed && (
+              <aside className="hidden md:flex md:flex-col md:gap-4 md:h-full md:max-h-[calc(100vh-8rem)] md:overflow-hidden">
+                <div className="flex-1 min-h-0">
+                  <RightSidebar 
+                    document={currentDocument} 
+                    aiAvailable={aiAvailable}
+                    onCollapse={() => setIsRightSidebarCollapsed(true)}
+                  />
+                </div>
+                
+                {/* Document Manager positioned under the sidebar */}
+                <div className="flex-shrink-0">
+                  <DocumentManager
+                    onSelectDocument={handleSelectDocument}
+                    onNewDocument={setCurrentDocument}
+                    currentDocumentId={currentDocument?.id}
+                    refreshDocumentsFlag={refreshDocumentsFlag}
+                    onDocumentsLoaded={setHasDocuments}
+                  />
+                </div>
+              </aside>
+            )}
           </div>
+          
+          {/* Floating expand button when sidebar is collapsed */}
+          {isRightSidebarCollapsed && (
+            <div className="fixed top-20 right-4 z-30 hidden md:block">
+              <Button
+                onClick={() => setIsRightSidebarCollapsed(false)}
+                size="sm"
+                variant="outline"
+                className="bg-white shadow-lg hover:shadow-xl transition-shadow"
+                title="Show writing tools and analysis"
+              >
+                <PanelRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           
           {/* Mobile Sidebar */}
           {isSidebarOpen && <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
