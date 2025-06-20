@@ -22,7 +22,10 @@ async function getUserRoleFromDB(userId: string): Promise<string | null> {
   return roleData?.role || null
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const supabase = await createClient()
     
@@ -39,31 +42,50 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
+    const studentId = params.id
+
+    if (!studentId) {
+      return NextResponse.json({ error: 'Student ID required' }, { status: 400 })
+    }
+
     // Use service role client for admin operations to bypass RLS
     if (!supabaseAdmin) {
       return NextResponse.json({ error: 'Service client not available' }, { status: 500 })
     }
 
-    // Get statistics using admin client to bypass RLS
-    const [studentsResult, documentsResult, chatSessionsResult] = await Promise.all([
-      supabaseAdmin.from('user_roles').select('*', { count: 'exact' }).eq('role', 'student'),
-      supabaseAdmin.from('documents').select('*', { count: 'exact' }),
-      supabaseAdmin.from('chat_sessions').select('*', { count: 'exact' })
-    ])
+    // First, check if the user has a student role
+    const { data: roleData, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', studentId)
+      .eq('role', 'student')
+      .single()
 
-    const stats = {
-      totalStudents: studentsResult.count || 0,
-      totalDocuments: documentsResult.count || 0,
-      totalChatSessions: chatSessionsResult.count || 0,
-      averageGrammarScore: 85, // Placeholder - could be calculated from actual data
-      activeThisWeek: 0, // Placeholder - could be calculated from user activity
-      // Add more statistics as needed
+    if (roleError || !roleData) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ stats })
+    // Get user details from auth.users using admin API
+    const { data: { user: studentUser }, error: userError } = await supabaseAdmin.auth.admin.getUserById(studentId)
+
+    if (userError || !studentUser) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+    }
+
+    // Return student data in the expected format
+    const student = {
+      id: studentUser.id,
+      email: studentUser.email,
+      created_at: studentUser.created_at,
+      email_confirmed_at: studentUser.email_confirmed_at,
+      last_sign_in_at: studentUser.last_sign_in_at,
+      role: 'student'
+    }
+
+    return NextResponse.json({ student })
 
   } catch (error) {
-    console.error('Admin stats API error:', error)
+    console.error('Admin student detail API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

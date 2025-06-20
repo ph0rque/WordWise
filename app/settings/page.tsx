@@ -15,6 +15,7 @@ import { User, Trash2, AlertTriangle, Loader2, ArrowLeft, CheckCircle2, AlertCir
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { getCurrentUserRole } from "@/lib/auth/roles"
 import { RoleBasedHeader } from "@/components/navigation/role-based-header"
+import { CoachesList } from "@/components/student/coaches-list"
 
 const GRADE_OPTIONS = [
   { value: "9", label: "9th Grade" },
@@ -39,6 +40,7 @@ const HUMANITIES_OPTIONS = [
 
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -65,14 +67,15 @@ export default function SettingsPage() {
           return
         }
 
-        // Check if user is a student
-        const userRole = await getCurrentUserRole()
-        if (userRole !== 'student') {
+        // Check if user has a valid role
+        const role = await getCurrentUserRole()
+        if (!role || !['student', 'admin'].includes(role)) {
           router.push('/')
           return
         }
 
         setUser(session.user)
+        setUserRole(role)
         
         // Load user settings
         const metadata = session.user.user_metadata || {}
@@ -106,12 +109,19 @@ export default function SettingsPage() {
     try {
       const supabase = getSupabaseClient()
       
+      // Prepare update data based on user role
+      const updateData: any = {
+        display_name: displayName.trim(),
+      }
+      
+      // Only include student-specific fields for students
+      if (userRole === 'student') {
+        updateData.grade = grade
+        updateData.humanities_classes = humanitiesClasses
+      }
+      
       const { error: updateError } = await supabase.auth.updateUser({
-        data: {
-          display_name: displayName.trim(),
-          grade: grade,
-          humanities_classes: humanitiesClasses,
-        }
+        data: updateData
       })
 
       if (updateError) {
@@ -180,7 +190,7 @@ export default function SettingsPage() {
   }
 
   const handleSignOut = () => {
-    router.push('/')
+    router.push(userRole === 'admin' ? '/admin' : '/')
   }
 
   if (loading) {
@@ -210,7 +220,7 @@ export default function SettingsPage() {
         <div className="mb-6">
           <Button
             variant="ghost"
-            onClick={() => router.push('/')}
+            onClick={() => router.push(userRole === 'admin' ? '/admin' : '/')}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -221,7 +231,12 @@ export default function SettingsPage() {
         <div className="max-w-2xl mx-auto space-y-6">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
-            <p className="text-gray-600">Manage your account preferences and information</p>
+            <p className="text-gray-600">
+              {userRole === 'admin' 
+                ? 'Manage your administrator account preferences and information'
+                : 'Manage your account preferences and information'
+              }
+            </p>
           </div>
 
           {/* Profile Settings */}
@@ -232,7 +247,10 @@ export default function SettingsPage() {
                 Profile Information
               </CardTitle>
               <CardDescription>
-                Update your display name and academic information
+                {userRole === 'admin' 
+                  ? 'Update your display name and account information'
+                  : 'Update your display name and academic information'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -248,50 +266,55 @@ export default function SettingsPage() {
                 <p className="text-xs text-gray-500">This is how your name will appear in the app</p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="grade">Grade Level</Label>
-                <Select value={grade} onValueChange={setGrade}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your grade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {GRADE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-500">Your current grade level helps us provide appropriate content</p>
-              </div>
+              {/* Student-specific fields */}
+              {userRole === 'student' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="grade">Grade Level</Label>
+                    <Select value={grade} onValueChange={setGrade}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GRADE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500">Your current grade level helps us provide appropriate content</p>
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Humanities Classes</Label>
-                <div className="grid grid-cols-2 gap-3 p-4 border rounded-md bg-gray-50">
-                  {HUMANITIES_OPTIONS.map((option) => (
-                    <div key={option.value} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={option.value}
-                        checked={humanitiesClasses.includes(option.value)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setHumanitiesClasses([...humanitiesClasses, option.value])
-                          } else {
-                            setHumanitiesClasses(humanitiesClasses.filter(cls => cls !== option.value))
-                          }
-                        }}
-                      />
-                      <Label
-                        htmlFor={option.value}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {option.label}
-                      </Label>
+                  <div className="space-y-2">
+                    <Label>Humanities Classes</Label>
+                    <div className="grid grid-cols-2 gap-3 p-4 border rounded-md bg-gray-50">
+                      {HUMANITIES_OPTIONS.map((option) => (
+                        <div key={option.value} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={option.value}
+                            checked={humanitiesClasses.includes(option.value)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setHumanitiesClasses([...humanitiesClasses, option.value])
+                              } else {
+                                setHumanitiesClasses(humanitiesClasses.filter(cls => cls !== option.value))
+                              }
+                            }}
+                          />
+                          <Label
+                            htmlFor={option.value}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {option.label}
+                          </Label>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500">Optional: Select all humanities classes you're currently taking</p>
-              </div>
+                    <p className="text-xs text-gray-500">Optional: Select all humanities classes you're currently taking</p>
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-end pt-4">
                 <Button 
@@ -311,6 +334,9 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Coaches Section - Students Only */}
+          {userRole === 'student' && <CoachesList />}
 
           {/* Account Management */}
           <Card>
@@ -357,8 +383,18 @@ export default function SettingsPage() {
                         </p>
                         <ul className="text-sm text-red-700 mt-1 list-disc list-inside">
                           <li>Your user account</li>
-                          <li>All your documents</li>
-                          <li>All your writing history</li>
+                          {userRole === 'student' ? (
+                            <>
+                              <li>All your documents</li>
+                              <li>All your writing history</li>
+                              <li>Your coach relationships</li>
+                            </>
+                          ) : (
+                            <>
+                              <li>Your administrator privileges</li>
+                              <li>Your student relationships</li>
+                            </>
+                          )}
                           <li>All your preferences and settings</li>
                         </ul>
                       </div>

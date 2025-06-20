@@ -248,6 +248,10 @@ export async function completeOnboarding(
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     const existingDisplayName = currentUser?.user_metadata?.display_name
     
+    if (!currentUser) {
+      return { user: null, error: 'No authenticated user found' }
+    }
+    
     // Prepare update data
     const updateData: any = {
       role,
@@ -279,6 +283,29 @@ export async function completeOnboarding(
 
     if (!user) {
       return { user: null, error: 'No user returned after update.' }
+    }
+
+    // CRITICAL: Also save the role to user_roles table
+    // This ensures API endpoints can check roles properly
+    try {
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .upsert({
+          user_id: user.id,
+          role: role
+        }, {
+          onConflict: 'user_id'
+        })
+
+      if (roleError) {
+        console.error('Error saving role to user_roles table:', roleError)
+        // Continue despite error - user metadata was updated successfully
+      } else {
+        console.log(`Successfully assigned ${role} role to user ${user.id} in user_roles table`)
+      }
+    } catch (roleTableError) {
+      console.error('Exception saving to user_roles table:', roleTableError)
+      // Continue despite error - user metadata was updated successfully
     }
 
     // Adapt Supabase user to our local User type

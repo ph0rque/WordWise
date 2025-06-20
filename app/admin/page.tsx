@@ -22,6 +22,7 @@ import { getCurrentUserRole, requireAdmin } from "@/lib/auth/roles"
 import { StudentAnalytics } from "@/components/admin/student-analytics"
 import { KeystrokeViewer } from "@/components/admin/keystroke-viewer"
 import { AddStudentDialog } from "@/components/admin/add-student-dialog"
+import { RoleBasedHeader } from "@/components/navigation/role-based-header"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -80,11 +81,7 @@ export default function AdminDashboard() {
         return
       }
 
-      setAdminUser({
-        id: session.user.id,
-        email: session.user.email,
-        role: 'admin'
-      })
+      setAdminUser(session.user)
 
       // Load students and stats
       await Promise.all([
@@ -212,32 +209,16 @@ export default function AdminDashboard() {
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="container max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-emerald-100 rounded-lg">
-                <GraduationCap className="h-6 w-6 text-emerald-600" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">WordWise Admin</h1>
-                <p className="text-gray-600">Student Management Dashboard</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-700">{adminUser?.email}</p>
-                <p className="text-xs text-gray-500">Administrator</p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSignOut}
-                className="flex items-center space-x-2"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
-              </Button>
-            </div>
+            <RoleBasedHeader user={adminUser} onSignOut={handleSignOut} />
           </div>
+        </div>
+      </div>
+
+      {/* Page Title */}
+      <div className="container max-w-7xl mx-auto px-4 py-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+          <p className="text-gray-600">Student Management & Analytics</p>
         </div>
       </div>
 

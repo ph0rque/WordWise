@@ -7,62 +7,43 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  
   try {
-    const supabase = createClient();
     const body = await request.json();
-    
-    const { 
-      recordingId, 
-      events, 
-      sessionMetadata,
-      encryptionKey,
-      privacyLevel = 'full'
-    } = body;
+    const { events, sessionId, userId } = body;
 
     // Validate required fields
-    if (!recordingId || !Array.isArray(events)) {
+    if (!events || !sessionId || !userId) {
       return NextResponse.json(
-        { error: 'Missing required fields: recordingId, events' },
+        { error: 'Missing required fields: events, sessionId, userId' },
         { status: 400 }
       );
     }
 
-    // For demo purposes, simulate successful storage
+    // For demo purposes, just log the events
     // In a real implementation, this would:
-    // 1. Authenticate the user
-    // 2. Validate recording session exists
-    // 3. Encrypt the keystroke data
-    // 4. Store in database with proper indexes
-    // 5. Update session statistics
+    // 1. Validate user permissions
+    // 2. Encrypt sensitive data
+    // 3. Store events in database
+    // 4. Update session statistics
+    // 5. Trigger real-time analytics
 
-    console.log(`Storing ${events.length} keystroke events for recording ${recordingId}`);
-    
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log(`Received ${events.length} keystroke events for session ${sessionId}`);
+    console.log('Events preview:', events.slice(0, 3)); // Log first 3 events for debugging
 
-    // Mock successful storage response
-    const storedEvents = events.map((event: any, index: number) => ({
-      id: `event-${recordingId}-${Date.now()}-${index}`,
-      recordingId,
-      timestamp: event.timestamp,
-      encrypted: true,
-      privacyLevel,
-      storedAt: new Date().toISOString()
-    }));
-
+    // Mock response
     return NextResponse.json({
       success: true,
-      message: `Stored ${events.length} keystroke events`,
-      events: storedEvents,
-      recordingId,
-      encryptionStatus: 'encrypted',
-      privacyLevel
+      eventsProcessed: events.length,
+      sessionId,
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('Error storing keystroke events:', error);
+    console.error('Keystroke events processing error:', error);
     return NextResponse.json(
-      { error: 'Failed to store keystroke events' },
+      { error: 'Failed to process keystroke events' },
       { status: 500 }
     );
   }

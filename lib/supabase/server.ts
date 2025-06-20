@@ -17,7 +17,7 @@ export const supabaseAdmin = supabaseUrl && supabaseServiceKey
   : null
 
 // Server-side client with user authentication
-export function createClient(cookieStore?: any) {
+export async function createClient() {
   // During build time, these might not be available
   if (!supabaseUrl) {
     if (process.env.NODE_ENV === 'production') {
@@ -50,23 +50,22 @@ export function createClient(cookieStore?: any) {
   // Create a standard client
   const client = createSupabaseClient(supabaseUrl, supabaseAnonKey)
 
-  // If we have cookies, try to set the session
-  if (cookieStore) {
-    try {
-      const refreshToken = cookieStore.get('sb-refresh-token')?.value
-      const accessToken = cookieStore.get('sb-access-token')?.value
-      
-      if (refreshToken && accessToken) {
-        // Set the session manually if we have tokens
-        client.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken
-        })
-      }
-    } catch (error) {
-      // Ignore errors during session setup
-      console.warn('Could not set session from cookies:', error)
+  // Try to get session from cookies
+  try {
+    const cookieStore = await cookies()
+    const refreshToken = cookieStore.get('sb-refresh-token')?.value
+    const accessToken = cookieStore.get('sb-access-token')?.value
+    
+    if (refreshToken && accessToken) {
+      // Set the session manually if we have tokens
+      await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      })
     }
+  } catch (error) {
+    // Ignore errors during session setup - might be called outside of request context
+    console.warn('Could not set session from cookies:', error)
   }
 
   return client

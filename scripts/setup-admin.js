@@ -14,19 +14,18 @@ const readline = require('readline')
 require('dotenv').config({ path: '.env.local' })
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-  console.error('❌ Missing Supabase environment variables')
-  console.error('Please ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in .env.local')
-  process.exit(1)
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing environment variables')
+  return
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
-    persistSession: false
-  }
+    persistSession: false,
+  },
 })
 
 const rl = readline.createInterface({
@@ -48,87 +47,74 @@ async function setupAdmin() {
   console.log()
   
   try {
-    // Get admin email
-    const adminEmail = await askQuestion('Enter the email address for the admin user: ')
-    
-    if (!adminEmail) {
-      console.log('❌ Email is required.')
-      rl.close()
-      return
-    }
-
-    console.log('\n🔍 Looking for user...')
-    
-    // Find the user by email
+    // Get all users to show options
+    console.log('📋 Available users:')
     const { data: authUsers, error: usersError } = await supabase.auth.admin.listUsers()
     
     if (usersError) {
-      throw new Error(`Failed to fetch users: ${usersError.message}`)
-    }
-
-    const targetUser = authUsers.users.find(u => u.email?.toLowerCase() === adminEmail.toLowerCase())
-    
-    if (!targetUser) {
-      console.log(`❌ User not found with email "${adminEmail}"`)
-      console.log('   The user needs to sign up to WordWise first.')
-      rl.close()
+      console.error('Error fetching users:', usersError)
       return
     }
 
-    console.log(`✅ Found user: ${targetUser.email} (ID: ${targetUser.id})`)
+    authUsers.users.forEach((user, index) => {
+      console.log(`${index + 1}. ${user.email} (ID: ${user.id})`)
+    })
 
-    // Check if user already has a role
-    const { data: existingRole, error: roleCheckError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', targetUser.id)
-      .single()
-
-    if (roleCheckError && roleCheckError.code !== 'PGRST116') { // PGRST116 = no rows returned
-      throw new Error(`Failed to check existing role: ${roleCheckError.message}`)
+    // Set the admin email - change this to your email
+    const adminEmail = 'andrei.shindyapin+admin@gmail.com' // Change this to your email
+    
+    const adminUser = authUsers.users.find(u => u.email === adminEmail)
+    
+    if (!adminUser) {
+      console.error(`❌ User with email ${adminEmail} not found`)
+      console.log('Available emails:', authUsers.users.map(u => u.email))
+      return
     }
 
-    if (existingRole) {
-      if (existingRole.role === 'admin') {
-        console.log('✅ User already has admin role!')
-        rl.close()
-        return
-      } else {
-        console.log(`⚠️  User currently has role: ${existingRole.role}`)
-        const confirm = await askQuestion('Do you want to change their role to admin? (y/N): ')
-        
-        if (confirm.toLowerCase() !== 'y' && confirm.toLowerCase() !== 'yes') {
-          console.log('❌ Setup cancelled.')
-          rl.close()
-          return
-        }
+    console.log(`\n🎯 Setting up admin role for: ${adminUser.email}`)
+    
+    // Insert admin role
+    const { data, error } = await supabase
+      .from('user_roles')
+      .insert({
+        user_id: adminUser.id,
+        role: 'admin'
+      })
+      .select()
 
-        // Update existing role
-        const { error: updateError } = await supabase
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        console.log('✅ User already has a role, updating to admin...')
+        const { data: updateData, error: updateError } = await supabase
           .from('user_roles')
           .update({ role: 'admin' })
-          .eq('user_id', targetUser.id)
-
+          .eq('user_id', adminUser.id)
+          .select()
+        
         if (updateError) {
-          throw new Error(`Failed to update role: ${updateError.message}`)
+          console.error('❌ Error updating role:', updateError)
+          return
         }
-
-        console.log('✅ Role updated to admin successfully!')
+        console.log('✅ Role updated successfully!')
+      } else {
+        console.error('❌ Error inserting role:', error)
+        return
       }
     } else {
-      // Insert new admin role
-      const { error: insertError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: targetUser.id,
-          role: 'admin'
-        })
-
-      if (insertError) {
-        throw new Error(`Failed to assign admin role: ${insertError.message}`)
-      }
-
       console.log('✅ Admin role assigned successfully!')
+    }
+
+    // Verify the role was set
+    const { data: roleCheck, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', adminUser.id)
+      .single()
+
+    if (roleError) {
+      console.error('❌ Error verifying role:', roleError)
+    } else {
+      console.log(`🔍 Verified role: ${roleCheck.role}`)
     }
 
     console.log('\n🎉 Admin setup completed!')
@@ -136,7 +122,7 @@ async function setupAdmin() {
     console.log('   They can now access the admin dashboard at /admin')
 
   } catch (error) {
-    console.error('\n❌ Setup failed:', error.message)
+    console.error('Script error:', error)
   }
   
   rl.close()

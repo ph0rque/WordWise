@@ -69,13 +69,20 @@ export default function StudentDetailPage() {
   const studentId = params.id as string
 
   useEffect(() => {
-    initializeStudentDetail()
+    if (studentId) {
+      initializeStudentDetail()
+    }
   }, [studentId])
 
   const initializeStudentDetail = async () => {
     try {
       setLoading(true)
       setError("")
+
+      if (!studentId) {
+        setError('Student ID not found')
+        return
+      }
 
       // Check if user is admin
       const userRole = await getCurrentUserRole()
@@ -100,25 +107,14 @@ export default function StudentDetailPage() {
 
   const loadStudentInfo = async () => {
     try {
-      const supabase = getSupabaseClient()
+      // Use our API endpoint instead of direct Supabase query
+      const response = await fetch(`/api/admin/students/${studentId}`)
       
-      const { data: studentData, error } = await supabase
-        .from('auth.users')
-        .select(`
-          id,
-          email,
-          user_role,
-          created_at,
-          email_confirmed_at,
-          last_sign_in_at
-        `)
-        .eq('id', studentId)
-        .eq('user_role', 'student')
-        .single()
-
-      if (error) {
+      if (!response.ok) {
         throw new Error('Student not found')
       }
+
+      const { student: studentData } = await response.json()
 
       if (!studentData) {
         throw new Error('Student not found')
@@ -133,7 +129,7 @@ export default function StudentDetailPage() {
       const enhancedStudent: StudentDetail = {
         id: studentData.id,
         email: studentData.email,
-        role: studentData.user_role as 'student',
+        role: 'student',
         created_at: studentData.created_at,
         email_confirmed_at: studentData.email_confirmed_at,
         last_sign_in_at: studentData.last_sign_in_at,
@@ -142,7 +138,14 @@ export default function StudentDetailPage() {
         writingStreak: Math.floor(Math.random() * 14), // Mock data: 0-14 days
         totalWords: Math.floor(Math.random() * 10000) + 1000, // Mock data
         improvementRate: Math.floor(Math.random() * 40) - 20, // Mock data: -20 to +20%
-        joinedDaysAgo
+        joinedDaysAgo,
+        permissions: {
+          canViewAllDocuments: false,
+          canViewKeystrokeRecordings: false,
+          canManageUsers: false,
+          canAccessAnalytics: false,
+          canExportData: false
+        }
       }
 
       setStudent(enhancedStudent)
@@ -212,7 +215,8 @@ export default function StudentDetailPage() {
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return 'Never'
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',

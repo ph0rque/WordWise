@@ -125,11 +125,6 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
                   Admin Dashboard
                 </DropdownMenuItem>
                 
-                <DropdownMenuItem onClick={() => router.push('/admin')}>
-                  <Users className="h-4 w-4 mr-2" />
-                  Manage Students
-                </DropdownMenuItem>
-                
                 <DropdownMenuSeparator />
               </>
             )}

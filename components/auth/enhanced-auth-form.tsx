@@ -112,7 +112,31 @@ export function EnhancedAuthForm() {
         setMessage(`Check your email for the confirmation link! Make sure to check your spam folder. Your ${selectedRole} account will be activated after email verification.`)
         setAuthStep('complete')
       } else if (data.user && data.session) {
-        // No email confirmation required (immediate signup) - redirect directly
+        // No email confirmation required (immediate signup)
+        // Save role to user_roles table immediately
+        try {
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .upsert({
+              user_id: data.user.id,
+              role: selectedRole
+            }, {
+              onConflict: 'user_id'
+            })
+
+          if (roleError) {
+            console.error('Error saving role to user_roles table:', roleError)
+            setError("Account created but role assignment failed. Please contact support.")
+            return
+          } else {
+            console.log(`Successfully assigned ${selectedRole} role to user ${data.user.id} in user_roles table`)
+          }
+        } catch (roleTableError) {
+          console.error('Exception saving to user_roles table:', roleTableError)
+          setError("Account created but role assignment failed. Please contact support.")
+          return
+        }
+
         setMessage(`Welcome! Your ${selectedRole} account has been set up successfully.`)
         setAuthStep('complete')
         
@@ -176,8 +200,6 @@ export function EnhancedAuthForm() {
       const supabase = getSupabaseClient()
       
       // Update user metadata with role
-      // Note: In production, this should be done via server-side API to update user metadata
-      // For now, we'll store the role selection and handle it in the callback
       const { error } = await supabase.auth.updateUser({
         data: { role: selectedRole }
       })
@@ -186,6 +208,30 @@ export function EnhancedAuthForm() {
         console.error("Error updating user role:", error)
         setError("Failed to assign role. Please try again or contact support.")
       } else {
+        // CRITICAL: Also save the role to user_roles table
+        try {
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .upsert({
+              user_id: pendingUserId,
+              role: selectedRole
+            }, {
+              onConflict: 'user_id'
+            })
+
+          if (roleError) {
+            console.error('Error saving role to user_roles table:', roleError)
+            setError("Role assignment partially failed. Please contact support.")
+            return
+          } else {
+            console.log(`Successfully assigned ${selectedRole} role to user ${pendingUserId} in user_roles table`)
+          }
+        } catch (roleTableError) {
+          console.error('Exception saving to user_roles table:', roleTableError)
+          setError("Role assignment failed. Please contact support.")
+          return
+        }
+
         setMessage(`Welcome! Your ${selectedRole} account has been set up successfully.`)
         setAuthStep('complete')
         

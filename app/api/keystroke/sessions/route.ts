@@ -32,7 +32,7 @@ interface KeystrokeSession {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const body = await request.json();
     
     const { 
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error creating keystroke session:', error);
+    console.error('Session creation error:', error);
     return NextResponse.json(
       { error: 'Failed to create keystroke recording session' },
       { status: 500 }

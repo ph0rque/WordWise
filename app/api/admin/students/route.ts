@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, supabaseAdmin } from '@/lib/supabase/server'
 
-// Helper function to get user role from database
-async function getUserRoleFromDB(userId: string, supabase: any): Promise<string | null> {
-  const { data: roleData, error } = await supabase
+// Helper function to get user role from database using service role to bypass RLS
+async function getUserRoleFromDB(userId: string): Promise<string | null> {
+  if (!supabaseAdmin) {
+    console.error('Admin client not available')
+    return null
+  }
+
+  const { data: roleData, error } = await supabaseAdmin
     .from('user_roles')
     .select('role')
     .eq('user_id', userId)
@@ -34,74 +39,86 @@ interface AuthUser {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
-    // Check if user is authenticated and is admin
+    // Check if user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userRole = await getUserRoleFromDB(user.id, supabase)
+    // Check if user is admin using service role to bypass RLS
+    const userRole = await getUserRoleFromDB(user.id)
     if (userRole !== 'admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    // Get all students from user_roles table
-    const { data: studentRoles, error: rolesError } = await supabase
-      .from('user_roles')
-      .select('user_id, role, created_at')
-      .eq('role', 'student')
-
-    if (rolesError) {
-      console.error('Error fetching student roles:', rolesError)
-      return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 })
+    // Use service role client for admin operations
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Service client not available' }, { status: 500 })
     }
 
-    // Get user details from auth.users using admin client
-    const { data: authUsers, error: usersError } = await supabase.auth.admin.listUsers()
+    // Get all students from auth.users with role metadata
+    const { data: authUsers, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
     
     if (usersError) {
       console.error('Error fetching users:', usersError)
-      return NextResponse.json({ error: 'Failed to fetch user details' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
     }
 
-    // Combine student role data with auth user data
-    const students = studentRoles.map((studentRole: StudentRole) => {
-      const authUser = authUsers.users.find((u: AuthUser) => u.id === studentRole.user_id)
-      return {
-        id: studentRole.user_id,
-        email: authUser?.email || 'Unknown',
-        role: studentRole.role,
-        created_at: authUser?.created_at || studentRole.created_at,
-        email_confirmed_at: authUser?.email_confirmed_at,
-        last_sign_in_at: authUser?.last_sign_in_at,
-        user_metadata: authUser?.user_metadata || {},
-        has_consented_to_keystrokes: authUser?.user_metadata?.has_consented_to_keystrokes || false
-      }
-    }).filter((student: any) => student.email !== 'Unknown') // Filter out students without email
+    // Get user roles from database using admin client to bypass RLS
+    const { data: userRoles, error: rolesError } = await supabaseAdmin
+      .from('user_roles')
+      .select('user_id, role')
+      .eq('role', 'student')
 
-    return NextResponse.json({ students })
+    if (rolesError) {
+      console.error('Error fetching user roles:', rolesError)
+      return NextResponse.json({ error: 'Failed to fetch user roles' }, { status: 500 })
+    }
+
+    // Create a map of user_id to role for quick lookup
+    const roleMap = new Map(userRoles.map((r: any) => [r.user_id, r.role]))
+
+    // Filter users to only include students
+    const students = authUsers.users
+      .filter((user: any) => roleMap.get(user.id) === 'student')
+      .map((user: any) => ({
+        id: user.id,
+        email: user.email,
+        role: 'student',
+        created_at: user.created_at,
+        email_confirmed_at: user.email_confirmed_at,
+        last_sign_in_at: user.last_sign_in_at,
+        user_metadata: user.user_metadata,
+        has_consented_to_keystrokes: user.user_metadata?.has_consented_to_keystrokes || false
+      }))
+
+    return NextResponse.json({
+      students,
+      total: students.length
+    })
 
   } catch (error) {
-    console.error('Admin students API error:', error)
+    console.error('Get students API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
-    // Check if user is authenticated and is admin
+    // Check if user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userRole = await getUserRoleFromDB(user.id, supabase)
+    // Check if user is admin using service role to bypass RLS
+    const userRole = await getUserRoleFromDB(user.id)
     if (userRole !== 'admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
@@ -113,25 +130,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
-    // Create new student user
-    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+    // Use service role client for admin operations
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Service client not available' }, { status: 500 })
+    }
+
+    // Create the user using admin API
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
       user_metadata: {
-        firstName: firstName || '',
-        lastName: lastName || '',
-        has_consented_to_keystrokes: false
-      }
+        first_name: firstName,
+        last_name: lastName,
+        full_name: `${firstName} ${lastName}`.trim() || email
+      },
+      email_confirm: true // Skip email confirmation for admin-created users
     })
 
     if (createError) {
-      console.error('Error creating student user:', createError)
-      return NextResponse.json({ error: createError.message }, { status: 400 })
+      console.error('Error creating user:', createError)
+      return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
     }
 
-    // Assign student role
-    const { error: roleError } = await supabase
+    if (!newUser.user) {
+      return NextResponse.json({ error: 'User creation failed' }, { status: 500 })
+    }
+
+    // Assign student role using admin client to bypass RLS
+    const { error: roleError } = await supabaseAdmin
       .from('user_roles')
       .insert({
         user_id: newUser.user.id,
@@ -140,8 +166,8 @@ export async function POST(request: NextRequest) {
 
     if (roleError) {
       console.error('Error assigning student role:', roleError)
-      // Try to delete the created user if role assignment fails
-      await supabase.auth.admin.deleteUser(newUser.user.id)
+      // Try to clean up the created user if role assignment fails
+      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
       return NextResponse.json({ error: 'Failed to assign student role' }, { status: 500 })
     }
 
@@ -153,7 +179,6 @@ export async function POST(request: NextRequest) {
         role: 'student',
         created_at: newUser.user.created_at,
         email_confirmed_at: newUser.user.email_confirmed_at,
-        last_sign_in_at: null,
         user_metadata: newUser.user.user_metadata,
         has_consented_to_keystrokes: false
       }
