@@ -6,7 +6,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Bot, FileCheck, SlidersHorizontal } from "lucide-react"
+import { Bot, SlidersHorizontal } from "lucide-react"
 import { ChatPanel } from "@/components/tutor/chat-panel"
 import type { Document } from "@/lib/types"
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
@@ -18,25 +18,15 @@ interface RightSidebarProps {
   aiAvailable: boolean
 }
 
-function SuggestionsPanelPlaceholder() {
-  return (
-    <div className="p-4 text-center text-sm text-gray-500">
-      <p>Suggestions will appear here as you write.</p>
-    </div>
-  )
-}
+
 
 export function RightSidebar({ document, aiAvailable }: RightSidebarProps) {
   const { canUseAITutor } = useRoleBasedFeatures()
 
   return (
     <div className="border-l bg-gray-50/50 h-full flex flex-col">
-      <Tabs defaultValue="suggestions" className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="suggestions">
-            <FileCheck className="mr-2 h-4 w-4" />
-            Suggestions
-          </TabsTrigger>
+      <Tabs defaultValue="analysis" className="flex-1 flex flex-col">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="analysis">
             <SlidersHorizontal className="mr-2 h-4 w-4" />
             Analysis
@@ -46,9 +36,6 @@ export function RightSidebar({ document, aiAvailable }: RightSidebarProps) {
             AI Tutor
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="suggestions" className="flex-1 overflow-y-auto p-4">
-          <SuggestionsPanelPlaceholder />
-        </TabsContent>
         <TabsContent value="analysis" className="flex-1 overflow-y-auto p-4 space-y-4">
           <ReadabilityDashboard analysis={undefined} isLoading={!document} />
           <VocabularyEnhancer text={document?.content} isLoading={!document} />

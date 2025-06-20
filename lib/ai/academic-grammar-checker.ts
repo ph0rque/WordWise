@@ -86,54 +86,47 @@ export async function checkAcademicGrammar(
       : "This is college level academic writing. "
 
     const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
+      model: openai("gpt-4.1-nano"),
       schema: AcademicSuggestionSchema,
       prompt: `
-        You are an expert academic writing tutor specializing in ${academicLevel} level writing.
+        You are an expert spelling and grammar checker specializing in ${academicLevel} level writing.
         ${subjectContext}${levelContext}
         
-        Analyze the following text for academic writing issues with a focus on:
+        Analyze the following text with priority focus on the LAST 10 WORDS, then check the entire text for:
         
-        1. GRAMMAR & MECHANICS:
-           - Subject-verb agreement
-           - Verb tense consistency
+        1. SPELLING ERRORS:
+           - Misspelled words
+           - Incorrect word forms
+           - Typos and character transpositions
+           - Homophones used incorrectly (their/there/they're, your/you're, etc.)
+           - Common spelling mistakes
+        
+        2. GRAMMAR ERRORS:
+           - Subject-verb agreement errors
+           - Verb tense inconsistencies and incorrect forms
            - Pronoun-antecedent agreement
-           - Sentence fragments and run-ons
-           - Comma splices
-           - Apostrophe usage
-           - Parallel structure
+           - Sentence fragments and run-on sentences
+           - Comma splices and semicolon misuse
+           - Apostrophe errors (possessive vs. plural)
+           - Parallel structure violations
+           - Dangling and misplaced modifiers
+           - Incorrect preposition usage
+           - Article errors (a, an, the)
+           - Comparative and superlative form errors
+           - Double negatives
         
-        2. ACADEMIC STYLE:
-           - Formal tone (avoid contractions, slang, colloquialisms)
-           - Third person perspective (avoid "I think", "you should")
-           - Active vs passive voice appropriateness
-           - Precise academic vocabulary
-           - Clear thesis statements and topic sentences
+        For each error found:
+        - Provide exact character position where error starts
+        - Give the correct spelling or grammar form
+        - Briefly explain the error type
+        - Rate confidence (0-100%) in your correction
         
-        3. CLARITY & COHERENCE:
-           - Unclear pronoun references
-           - Wordy or redundant phrases
-           - Logical flow and transitions
-           - Sentence variety
-        
-        4. VOCABULARY ENHANCEMENT:
-           - Suggest more precise academic terms
-           - Identify overused words
-           - Recommend subject-specific vocabulary when appropriate
-        
-        For each suggestion:
-        - Provide exact character position where issue starts
-        - Give specific corrected text
-        - Explain the academic writing principle violated
-        - Rate confidence (0-100%) in your suggestion
-        - Include relevant grammar rule or academic convention
-        
-        Prioritize issues that most impact academic credibility and clarity.
+        PRIORITIZE: Focus heavily on the last 10 words of the text, as this is where the user is currently typing.
         
         Text to analyze:
         "${text}"
         
-        Return suggestions ordered by importance for academic writing success.
+        Return only spelling and grammar errors, ordered by position (last 10 words first).
       `,
     })
 

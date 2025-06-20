@@ -57,7 +57,7 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
     console.log("Calling OpenAI API for grammar check")
 
     const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
+      model: openai("gpt-4.1-nano"),
       schema: SuggestionSchema,
       prompt: `
         Analyze the following text for grammar, spelling, style, clarity, and tone issues. 
