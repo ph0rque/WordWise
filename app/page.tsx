@@ -401,12 +401,12 @@ export default function Page() {
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           />
         </header>
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 min-h-0">
           <div className={cn(
-            "container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4",
+            "container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 min-h-0 flex-1",
             isRightSidebarCollapsed ? "md:grid-cols-1" : "md:grid-cols-[3fr_1.5fr]"
           )}>
-            <main className="flex flex-col gap-4">
+            <main className="flex flex-col gap-4 min-h-0">
               {currentDocument ? (
                 <TextEditor
                   key={currentDocument.id}
@@ -436,7 +436,7 @@ export default function Page() {
               )}
             </main>
             {!isRightSidebarCollapsed && (
-              <aside className="hidden md:flex md:flex-col md:gap-4 md:h-full md:max-h-[calc(100vh-8rem)] md:overflow-hidden">
+              <aside className="hidden md:flex md:flex-col md:gap-4 md:h-full md:min-h-0">
                 <div className="flex-1 min-h-0">
                   <RightSidebar 
                     document={currentDocument} 

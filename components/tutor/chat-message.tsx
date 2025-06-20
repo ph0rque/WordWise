@@ -16,6 +16,130 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// Simple markdown renderer for AI responses
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  
+  let currentParagraph: string[] = []
+  let inList = false
+  let listItems: string[] = []
+  
+  const flushParagraph = () => {
+    if (currentParagraph.length > 0) {
+      const paragraphText = currentParagraph.join('\n')
+      elements.push(
+        <p key={elements.length} className="mb-2 last:mb-0">
+          {parseInlineMarkdown(paragraphText)}
+        </p>
+      )
+      currentParagraph = []
+    }
+  }
+  
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={elements.length} className="mb-2 last:mb-0 pl-4 space-y-1">
+          {listItems.map((item, index) => (
+            <li key={index} className="list-disc">
+              {parseInlineMarkdown(item)}
+            </li>
+          ))}
+        </ul>
+      )
+      listItems = []
+      inList = false
+    }
+  }
+  
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trim()
+    
+    // Handle bullet points
+    if (trimmedLine.match(/^[•·\-\*]\s+/)) {
+      if (!inList) {
+        flushParagraph()
+        inList = true
+      }
+      listItems.push(trimmedLine.replace(/^[•·\-\*]\s+/, ''))
+    } else if (trimmedLine === '') {
+      // Empty line - flush current content
+      if (inList) {
+        flushList()
+      } else {
+        flushParagraph()
+      }
+    } else {
+      // Regular text
+      if (inList) {
+        flushList()
+      }
+      currentParagraph.push(line)
+    }
+  })
+  
+  // Flush remaining content
+  if (inList) {
+    flushList()
+  } else {
+    flushParagraph()
+  }
+  
+  return elements
+}
+
+// Parse inline markdown like **bold** and *italic*
+function parseInlineMarkdown(text: string): React.ReactNode {
+  const parts: Array<{ type: 'bold' | 'italic', content: string, placeholder: string }> = []
+  let currentText = text
+  let key = 0
+  
+  // Handle **bold**
+  currentText = currentText.replace(/\*\*(.*?)\*\*/g, (match, content) => {
+    const placeholder = `__BOLD_${key}__`
+    parts.push({ type: 'bold', content, placeholder })
+    key++
+    return placeholder
+  })
+  
+  // Handle *italic*
+  currentText = currentText.replace(/\*(.*?)\*/g, (match, content) => {
+    const placeholder = `__ITALIC_${key}__`
+    parts.push({ type: 'italic', content, placeholder })
+    key++
+    return placeholder
+  })
+  
+  // Split by placeholders and reconstruct
+  let result: React.ReactNode[] = [currentText]
+  
+  parts.forEach((part) => {
+    result = result.flatMap((item) => {
+      if (typeof item === 'string' && item.includes(part.placeholder)) {
+        const splitParts = item.split(part.placeholder)
+        const newParts: React.ReactNode[] = []
+        
+        splitParts.forEach((textPart, index) => {
+          if (textPart) newParts.push(textPart)
+          if (index < splitParts.length - 1) {
+            if (part.type === 'bold') {
+              newParts.push(<strong key={`${part.placeholder}-${index}`}>{part.content}</strong>)
+            } else if (part.type === 'italic') {
+              newParts.push(<em key={`${part.placeholder}-${index}`}>{part.content}</em>)
+            }
+          }
+        })
+        
+        return newParts
+      }
+      return item
+    })
+  })
+  
+  return result
+}
+
 export type MessageType = 'user' | 'assistant' | 'system'
 export type MessageStatus = 'sending' | 'sent' | 'error' | 'delivered'
 
@@ -103,20 +227,24 @@ export function ChatMessageComponent({
 
       {/* Message Content */}
       <div className={cn(
-        "flex-1 max-w-[80%]",
+        "flex-1 max-w-[80%] min-w-0",
         isUser ? "flex flex-col items-end" : "flex flex-col items-start"
       )}>
         <Card className={cn(
-          "w-fit max-w-full",
+          "w-fit max-w-full min-w-0",
           isUser 
             ? "bg-blue-50 border-blue-200" 
             : "bg-white border-gray-200"
         )}>
-          <CardContent className="p-3">
-            <div className="prose prose-sm max-w-none">
-              <p className="text-sm leading-relaxed m-0 whitespace-pre-wrap">
-                {message.content}
-              </p>
+          <CardContent className="p-3 min-w-0 overflow-hidden">
+            <div className="prose prose-sm max-w-none min-w-0">
+              <div className="text-sm leading-relaxed break-words">
+                {isAssistant ? renderMarkdown(message.content) : (
+                  <p className="m-0 whitespace-pre-wrap">
+                    {message.content}
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Metadata for assistant messages */}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { OpenAI } from 'openai'
-import { getSupabaseClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/server'
 import { ChatSessionManager } from '@/lib/chat/session-manager'
 import type { ChatMessage } from '@/components/tutor/chat-message'
 
@@ -73,8 +73,8 @@ const WRITING_CONCEPTS = [
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const supabase = getSupabaseClient()
+    // Get authenticated user using server-side authentication
+    const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
     if (authError || !user) {
@@ -118,8 +118,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initialize session manager
-    const sessionManager = new ChatSessionManager()
+    // Initialize session manager with server-side Supabase client
+    const sessionManager = new ChatSessionManager(supabase)
     
     // Get or create chat session
     let chatSession
@@ -207,7 +207,13 @@ export async function POST(request: NextRequest) {
     if (documentContent && documentContent.length > 0) {
       const wordCount = documentContent.split(/\s+/).length
       const charCount = documentContent.length
-      contextPrompt = `\n\nSTUDENT'S CURRENT DOCUMENT: "${documentTitle}" (${wordCount} words, ${charCount} characters)\n\nThe student is working on this document. You can reference it to provide specific guidance about structure, clarity, or writing techniques, but do not write content for them.`
+      
+      // Include a portion of the document content for context (limit to ~500 chars to stay within token limits)
+      const contentPreview = documentContent.length > 500 
+        ? documentContent.substring(0, 500) + '...' 
+        : documentContent
+      
+      contextPrompt = `\n\nSTUDENT'S CURRENT DOCUMENT: "${documentTitle}" (${wordCount} words, ${charCount} characters)\n\nCURRENT CONTENT:\n"${contentPreview}"\n\nYou can reference this specific content to provide targeted guidance about structure, clarity, writing techniques, or specific improvements. Help the student improve what they've written, but do not write content for them.`
     }
 
     // Prepare the prompt

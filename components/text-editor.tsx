@@ -467,11 +467,36 @@ export function TextEditor({
     tooltip.appendChild(correction)
     tooltip.appendChild(explanation)
     
-    const rect = target.getBoundingClientRect()
-    tooltip.style.left = `${rect.left}px`
-    tooltip.style.top = `${rect.bottom + 5}px`
-    
+    // Add tooltip to DOM first to measure its height
     document.body.appendChild(tooltip)
+    
+    // Get positioning information
+    const rect = target.getBoundingClientRect()
+    const tooltipRect = tooltip.getBoundingClientRect()
+    const viewportHeight = window.innerHeight
+    const scrollY = window.scrollY
+    
+    // Calculate if tooltip would be cut off at bottom
+    const spaceBelow = viewportHeight - rect.bottom
+    const spaceAbove = rect.top
+    const tooltipHeight = tooltipRect.height
+    
+    // Position tooltip above if there's not enough space below but enough space above
+    const shouldPositionAbove = spaceBelow < tooltipHeight + 10 && spaceAbove > tooltipHeight + 10
+    
+    // Set horizontal position (ensure it doesn't go off screen)
+    const leftPosition = Math.max(10, Math.min(rect.left, window.innerWidth - tooltipRect.width - 10))
+    tooltip.style.left = `${leftPosition}px`
+    
+    // Set vertical position
+    if (shouldPositionAbove) {
+      tooltip.style.top = `${rect.top - tooltipHeight - 5}px`
+      // Add a visual indicator that tooltip is above (optional)
+      tooltip.style.borderBottom = '2px solid #10b981'
+    } else {
+      tooltip.style.top = `${rect.bottom + 5}px`
+      tooltip.style.borderTop = '2px solid #10b981'
+    }
     
     // Add hover handlers to tooltip to prevent it from disappearing when hovering over it
     tooltip.addEventListener('mouseenter', () => {
@@ -578,9 +603,9 @@ export function TextEditor({
 
 
   return (
-    <div className="flex h-full flex-col relative bg-white">
+    <div className="flex h-full flex-col relative bg-white min-h-0">
       {/* Header */}
-      <div className="flex items-center gap-4 border-b bg-gray-50/50 p-4">
+      <div className="flex items-center gap-4 border-b bg-gray-50/50 p-4 flex-shrink-0">
         <input
           type="text"
           value={title}
@@ -613,8 +638,8 @@ export function TextEditor({
       )}
 
       {/* Editor */}
-      <div className="flex-1 overflow-y-auto relative">
-        <div className="relative h-full">
+      <div className="flex-1 overflow-y-auto relative min-h-0">
+        <div className="relative min-h-full">
           {/* Content editable editor */}
           <div
             ref={editorRef}

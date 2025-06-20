@@ -24,7 +24,7 @@ export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebar
   const { canUseAITutor } = useRoleBasedFeatures()
 
   return (
-    <div className="border-l bg-gray-50/50 h-full max-h-screen flex flex-col">
+    <div className="border-l bg-gray-50/50 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between p-3 border-b bg-white flex-shrink-0">
         <h2 className="text-sm font-medium text-gray-700">Writing Tools</h2>
         {onCollapse && (
@@ -40,7 +40,7 @@ export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebar
         )}
       </div>
       <Tabs defaultValue="analysis" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+        <TabsList className="grid w-full grid-cols-2 flex-shrink-0 m-2">
           <TabsTrigger value="analysis">
             <SlidersHorizontal className="mr-2 h-4 w-4" />
             Analysis
@@ -50,23 +50,31 @@ export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebar
             AI Tutor
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="analysis" className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-          <ReadabilityDashboard analysis={undefined} isLoading={!document} />
-          <VocabularyEnhancer text={document?.content} isLoading={!document} />
+        <TabsContent value="analysis" className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 data-[state=active]:flex data-[state=active]:flex-col">
+          <div className="space-y-4">
+            <ReadabilityDashboard analysis={undefined} isLoading={!document} />
+            <VocabularyEnhancer text={document?.content} isLoading={!document} />
+          </div>
         </TabsContent>
-        <TabsContent value="ai-tutor" className="flex-1 overflow-y-auto p-4 min-h-0">
+        <TabsContent value="ai-tutor" className="flex-1 min-h-0 data-[state=active]:flex data-[state=active]:flex-col">
           {document && canUseAITutor ? (
-            <ChatPanel
-              documentId={document.id}
-              documentTitle={document.title}
-              aiAvailable={aiAvailable}
-              isStudent={true}
-            />
+            <div className="flex-1 min-h-0 p-4">
+              <ChatPanel
+                documentId={document.id}
+                documentContent={document.content}
+                documentTitle={document.title}
+                aiAvailable={aiAvailable}
+                isStudent={true}
+                className="h-full"
+              />
+            </div>
           ) : (
-            <div className="text-center text-sm text-gray-500">
-              {canUseAITutor
-                ? "Select a document to use the AI Tutor."
-                : "The AI Tutor is not available for your account."}
+            <div className="flex items-center justify-center h-full p-4">
+              <div className="text-center text-sm text-gray-500">
+                {canUseAITutor
+                  ? "Select a document to use the AI Tutor."
+                  : "The AI Tutor is not available for your account."}
+              </div>
             </div>
           )}
         </TabsContent>

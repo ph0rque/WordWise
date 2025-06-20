@@ -1,5 +1,6 @@
 import { getSupabaseClient } from '@/lib/supabase/client'
 import type { ChatMessage, MessageType, MessageStatus } from '@/components/tutor/chat-message'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface ChatSession {
   id: string
@@ -54,7 +55,11 @@ interface DatabaseMessage {
 }
 
 export class ChatSessionManager {
-  private supabase = getSupabaseClient()
+  private supabase: SupabaseClient
+
+  constructor(supabaseClient?: SupabaseClient) {
+    this.supabase = supabaseClient || getSupabaseClient()
+  }
 
   /**
    * Get or create an active chat session for a document
