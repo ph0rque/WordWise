@@ -58,14 +58,15 @@ WordWise is a functional grammar-checking application with core features impleme
 ## Active Development Focus
 
 ### Recently Completed (Latest Update)
-1. **Independent Right Panel Scrolling** ✅ **JUST COMPLETED**
-   - **Fixed Scrolling Issue**: Right panel now scrolls independently of the main editor area
-   - **Height Constraints**: Added proper `max-h-screen` and `min-h-0` classes for flex container behavior
-   - **Layout Optimization**: Used flexbox with `flex-shrink-0` for fixed header/tabs and `flex-1` for scrollable content
-   - **Accessibility Improvement**: Users can now access all analysis content regardless of text area size
-   - **Better UX**: No more content cutoff when the editor area is small or resized
-   - **Cross-Device Support**: Scrolling works consistently across different screen sizes and orientations
-   - **Document Manager**: Positioned document manager as non-scrollable footer below the scrollable analysis panel
+1. **Major UI/UX Improvements Sprint - COMMITTED & PUSHED** ✅ **JUST COMPLETED**
+   - **Collapsible Right Sidebar**: Students can now collapse writing tools for distraction-free focused writing
+   - **Always-Visible Save Button**: Moved from dropdown to dedicated button for better accessibility
+   - **Simplified Analysis Panels**: Streamlined readability dashboard and vocabulary enhancer for sidebar optimization
+   - **Removed Suggestions**: Eliminated distracting suggestion prompts from analysis panel for cleaner interface
+   - **Independent Scrolling**: Fixed right panel to scroll independently of editor size for better content access
+   - **Enhanced Layout**: Improved responsive grid layout and component organization
+   - **Performance Gains**: Reduced bundle size (394 insertions, 877 deletions) and cleaned unused code
+   - **Git Status**: Committed as `6ab41d9` and pushed to `feature/improvements` branch
 
 2. **Always-Visible Save Button** ✅ **COMPLETED**
    - **Enhanced Accessibility**: Save button moved out of three-dots dropdown menu to be always visible
