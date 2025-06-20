@@ -23,6 +23,7 @@ import {
 import { RightSidebar } from "@/components/sidebar/right-sidebar"
 import { checkAIAvailability } from "@/lib/client-grammar-checker"
 import { cn } from "@/lib/utils"
+import LandingPage from "@/components/landing/landing-page"
 
 function SearchParamsHandler({ onRedirectTo }: { onRedirectTo: (redirectTo: string | null) => void }) {
   const searchParams = useSearchParams()
@@ -301,9 +302,9 @@ export default function Page() {
     return <DemoEditor />
   }
 
-  // If not authenticated, show auth form
+  // If not authenticated, show landing page
   if (!roleBasedAuth) {
-    console.log("No user, showing auth form")
+    console.log("No user, showing landing page")
     return (
       <>
         {redirectTo && (
@@ -313,11 +314,7 @@ export default function Page() {
             </p>
           </div>
         )}
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="w-full max-w-md p-4">
-            <EnhancedAuthForm />
-          </div>
-        </div>
+        <LandingPage />
       </>
     )
   }
