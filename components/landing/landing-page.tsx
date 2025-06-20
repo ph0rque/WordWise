@@ -20,8 +20,7 @@ import {
   ChevronRight
 } from "lucide-react"
 import Link from "next/link"
-import DemoSection from "./demo-section"
-import TestimonialsSection from "./testimonials-section"
+
 import { AuthModal } from "./auth-modal"
 
 export default function LandingPage() {
@@ -317,11 +316,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Demo Section */}
-      <DemoSection />
 
-      {/* Testimonials Section */}
-      <TestimonialsSection />
 
       {/* Benefits Section */}
       <section className="py-20 bg-white">
@@ -395,7 +390,7 @@ export default function LandingPage() {
               className="w-full sm:w-auto"
               onClick={() => setIsAuthModalOpen(true)}
             >
-              Get Started Free
+              Start Writing Better Essays
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
             <Button size="lg" variant="outline" className="w-full sm:w-auto border-white text-white hover:bg-white hover:text-gray-900">
