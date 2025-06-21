@@ -242,6 +242,13 @@ export default function Page() {
     initializeAuth()
   }, [])
 
+  // Admin redirect effect - must be at top level to avoid hook order issues
+  useEffect(() => {
+    if (showAdminNavigation && currentRole === 'admin' && !loading && !roleLoading) {
+      router.push('/admin')
+    }
+  }, [showAdminNavigation, currentRole, loading, roleLoading, router])
+
   const handleSignOut = async () => {
     const supabase = getSupabaseClient()
     await supabase.auth.signOut()
@@ -350,38 +357,13 @@ export default function Page() {
     )
   }
 
-  // Redirect admins to dashboard if they're on the main page
+  // Show loading for admin users while redirecting
   if (showAdminNavigation && currentRole === 'admin') {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <RoleBasedHeader 
-          user={user}
-          onSignOut={handleSignOut}
-        />
-        <div className="container max-w-4xl mx-auto px-4 py-8">
-          <div className="text-center space-y-6">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                As an administrator, you might want to visit the{" "}
-                <Button 
-                  variant="link" 
-                  className="p-0 h-auto"
-                  onClick={() => window.location.href = '/admin'}
-                >
-                  Admin Dashboard
-                </Button>{" "}
-                to manage students and view analytics.
-              </AlertDescription>
-            </Alert>
-            
-            <div className="p-8 bg-white rounded-lg shadow-sm border">
-              <h1 className="text-2xl font-bold text-gray-900 mb-4">Admin Text Editor</h1>
-              <p className="text-gray-600 mb-6">
-                You can use the text editor below or visit the admin dashboard to manage students.
-              </p>
-            </div>
-          </div>
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+          <p className="text-gray-600">Redirecting to Admin Dashboard...</p>
         </div>
       </main>
     )

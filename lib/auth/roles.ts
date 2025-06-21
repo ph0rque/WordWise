@@ -7,92 +7,99 @@ import { ROLE_PERMISSIONS } from '@/lib/types'
 
 /**
  * Get the current user's role from the user_roles database table
+ * This is optimized to use getCurrentUserWithRole internally to avoid duplicate queries
  * @returns Promise<UserRole | null> - The user's role or null if not authenticated
  */
 export async function getCurrentUserRole(): Promise<UserRole | null> {
   try {
+    const userWithRole = await getCurrentUserWithRole()
+    return userWithRole?.role || null
+  } catch (error) {
+    console.error('Error getting user role:', error)
+    return null
+  }
+}
+
+/**
+ * Get the current user with role information using session data
+ * This bypasses RLS issues by using the database function directly
+ * @returns Promise<{ user: UserWithRole, session: any } | null> - User with role and session or null
+ */
+export async function getCurrentUserWithRoleFromSession(): Promise<{ user: UserWithRole, session: any } | null> {
+  try {
     const supabase = getSupabaseClient()
     
-    // Single timeout for the entire operation
-    const operationPromise = (async () => {
-      // Get user first
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      
-      if (authError || !user) {
-        console.error('Error getting authenticated user:', authError)
-        return null
-      }
+    // Get session (includes user data)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !session?.user) {
+      console.error('Error getting session:', sessionError)
+      return null
+    }
 
-      // Get role from user_roles table
-      const { data: roleData, error: roleError } = await supabase
+    const user = session.user
+
+    // Use the database function to get role (bypasses RLS issues)
+    const { data: roleData, error: roleError } = await supabase
+      .rpc('get_user_role')
+    
+    if (roleError) {
+      console.error('Error getting user role from database function:', roleError)
+      // If the function fails, try direct query as fallback
+      const { data: fallbackData, error: fallbackError } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
         .single()
       
-      if (roleError) {
-        console.error('Error getting user role from database:', roleError)
-        return null
+      if (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError)
+        // Default to student role if everything fails
+        const role = 'student' as UserRole
+        const permissions = ROLE_PERMISSIONS[role]
+
+        console.log('getCurrentUserWithRoleFromSession debug (fallback to student):', {
+          userId: user.id,
+          email: user.email,
+          role
+        })
+
+        const userWithRole: UserWithRole = {
+          id: user.id,
+          email: user.email!,
+          role,
+          permissions,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+        }
+
+        return { user: userWithRole, session }
       }
       
-      const role = roleData?.role as UserRole
-      
-      console.log('getCurrentUserRole debug:', {
-        userId: user.id,
-        email: user.email,
-        role
-      })
-      
-      return role || null
-    })()
-    
-    // Apply timeout to the entire operation
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('User role fetch timed out')), 10000)
-    )
-    
-    return await Promise.race([operationPromise, timeoutPromise])
-    
-  } catch (error) {
-    console.error('Error getting user role:', error)
-    
-    // If it's a timeout error, return null to allow retry
-    if (error instanceof Error && error.message.includes('timed out')) {
-      throw error // Re-throw timeout errors to be handled by caller
-    }
-    
-    return null // Return null for other errors
-  }
-}
+      const role = fallbackData?.role as UserRole || 'student'
+      const permissions = ROLE_PERMISSIONS[role]
 
-/**
- * Get the current user with role information
- * @returns Promise<UserWithRole | null> - User with role and permissions or null
- */
-export async function getCurrentUserWithRole(): Promise<UserWithRole | null> {
-  try {
-    const supabase = getSupabaseClient()
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return null
-    }
+      const userWithRole: UserWithRole = {
+        id: user.id,
+        email: user.email!,
+        role,
+        permissions,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      }
 
-    // Get role from user_roles table
-    const { data: roleData, error: roleError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single()
-    
-    if (roleError || !roleData) {
-      return null // Return null if no role is assigned
+      return { user: userWithRole, session }
     }
     
-    const role = roleData.role as UserRole
+    const role = roleData as UserRole || 'student'
     const permissions = ROLE_PERMISSIONS[role]
 
-    return {
+    console.log('getCurrentUserWithRoleFromSession debug:', {
+      userId: user.id,
+      email: user.email,
+      role
+    })
+
+    const userWithRole: UserWithRole = {
       id: user.id,
       email: user.email!,
       role,
@@ -100,6 +107,23 @@ export async function getCurrentUserWithRole(): Promise<UserWithRole | null> {
       created_at: user.created_at,
       updated_at: user.updated_at,
     }
+
+    return { user: userWithRole, session }
+  } catch (error) {
+    console.error('Unexpected error getting user with role from session:', error)
+    return null
+  }
+}
+
+/**
+ * Get the current user with role information
+ * This is the primary function for getting user + role data with a single database query
+ * @returns Promise<UserWithRole | null> - User with role and permissions or null
+ */
+export async function getCurrentUserWithRole(): Promise<UserWithRole | null> {
+  try {
+    const result = await getCurrentUserWithRoleFromSession()
+    return result?.user || null
   } catch (error) {
     console.error('Unexpected error getting user with role:', error)
     return null
