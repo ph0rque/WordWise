@@ -41,7 +41,14 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
   try {
     const supabase = getSupabaseClient()
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Add timeout to prevent hanging
+    const userPromise = supabase.auth.getUser()
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('User role fetch timed out')), 8000)
+    )
+    
+    const { data: { user }, error: authError } = await Promise.race([userPromise, timeoutPromise])
+    
     if (authError || !user) {
       console.error('Error getting authenticated user:', authError)
       return null
@@ -61,8 +68,6 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
     console.log('getCurrentUserRole debug:', {
       userId: user.id,
       email: user.email,
-      user_metadata: user.user_metadata,
-      app_metadata: user.app_metadata,
       role,
       appRole,
       pendingRole,
@@ -80,8 +85,14 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
     
     return finalRole // Return null if no role is set instead of defaulting to student
   } catch (error) {
-    console.error('Unexpected error getting user role:', error)
-    return null // Return null instead of defaulting to student
+    console.error('Error getting user role:', error)
+    
+    // If it's a timeout error, return null to allow retry
+    if (error instanceof Error && error.message.includes('timed out')) {
+      throw error // Re-throw timeout errors to be handled by caller
+    }
+    
+    return null // Return null for other errors
   }
 }
 

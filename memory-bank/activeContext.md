@@ -58,7 +58,25 @@ WordWise is a functional grammar-checking application with core features impleme
 ## Active Development Focus
 
 ### Recently Completed (Latest Update)
-1. **Fixed Dialog Accessibility Error** ✅ **JUST COMPLETED**
+1. **Fixed Production Loading Timeout Issue** ✅ **JUST COMPLETED**
+   - **Problem Resolved**: Production site getting stuck at "useUserRole: Getting session..." with infinite loading
+   - **Root Cause**: Authentication operations hanging indefinitely in production environment without timeouts
+   - **Solution Implemented**:
+     - **Added Operation Timeouts**: 10s timeout for session operations, 8s for role operations
+     - **Retry Logic**: Automatic retry with exponential backoff (max 3 attempts)
+     - **Error Recovery**: Graceful fallback to unauthenticated state after timeout
+     - **Better UX**: Loading spinner with error fallback after 15 seconds
+     - **User-Friendly Errors**: Clear error messages with troubleshooting tips
+   - **Technical Details**:
+     - Added `withTimeout` helper function to race promises against timers
+     - Enhanced `useUserRole` hook with retry logic and mounted state tracking
+     - Improved `getCurrentUserRole` with timeout handling and error propagation
+     - Added `ErrorFallback` component with retry and refresh options
+     - Connection-specific error handling with troubleshooting guidance
+   - **Files Modified**: `lib/hooks/use-user-role.ts`, `lib/auth/roles.ts`, `app/ClientLayout.tsx`
+   - **Impact**: ✅ Production site now recovers from connection issues and provides clear user feedback
+
+2. **Fixed Dialog Accessibility Error** ✅ **COMPLETED**
    - **Problem Resolved**: Console error "DialogContent requires a DialogTitle for accessibility" on homepage
    - **Root Cause**: AuthModal component was missing required DialogTitle component for screen reader accessibility
    - **Solution Implemented**:

@@ -14,7 +14,19 @@ export interface UseUserRoleState {
 }
 
 // Timeout constants
-const RETRY_DELAY = 2000 // 2 seconds
+const SESSION_TIMEOUT = 10000 // 10 seconds max for session operations
+const ROLE_TIMEOUT = 8000 // 8 seconds max for role operations
+const RETRY_DELAY = 3000 // 3 seconds between retries
+
+// Helper function to create promises with timeout
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ])
+}
 
 /**
  * Custom hook for managing user role state and providing role-based UI utilities
@@ -25,6 +37,8 @@ export function useUserRole(): UseUserRoleState {
   const [error, setError] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const retryCountRef = useRef(0)
+  const maxRetries = 3
 
   const refreshUserRole = async () => {
     try {
@@ -34,9 +48,14 @@ export function useUserRole(): UseUserRoleState {
 
       const supabase = getSupabaseClient()
       
-      // Simple session check without timeout
-      console.log('🔍 useUserRole: Getting session...')
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      // Get session with timeout
+      console.log('🔍 useUserRole: Getting session with timeout...')
+      const sessionPromise = supabase.auth.getSession()
+      const { data: { session }, error: sessionError } = await withTimeout(
+        sessionPromise, 
+        SESSION_TIMEOUT, 
+        'Session retrieval'
+      )
       
       if (sessionError) {
         console.error('❌ useUserRole: Session error:', sessionError)
@@ -52,23 +71,54 @@ export function useUserRole(): UseUserRoleState {
         console.log('🚫 useUserRole: No session, setting unauthenticated state')
         setRole(null)
         setIsAuthenticated(false)
+        retryCountRef.current = 0 // Reset retry count on successful operation
         return
       }
 
       setIsAuthenticated(true)
       
-      // Get user role without timeout
-      console.log('🔍 useUserRole: Getting user role...')
-      const userRole = await getCurrentUserRole()
+      // Get user role with timeout
+      console.log('🔍 useUserRole: Getting user role with timeout...')
+      const rolePromise = getCurrentUserRole()
+      const userRole = await withTimeout(
+        rolePromise,
+        ROLE_TIMEOUT,
+        'Role retrieval'
+      )
+      
       console.log('✅ useUserRole: Retrieved role:', userRole)
       setRole(userRole)
+      retryCountRef.current = 0 // Reset retry count on success
       
     } catch (err) {
       console.error('❌ useUserRole: Error in refreshUserRole:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user role'
-      setError(errorMessage)
-      setRole(null)
-      setIsAuthenticated(false)
+      
+      // Handle timeout errors specifically
+      if (errorMessage.includes('timed out')) {
+        retryCountRef.current += 1
+        
+        if (retryCountRef.current <= maxRetries) {
+          console.log(`⏳ useUserRole: Timeout occurred, retrying in ${RETRY_DELAY}ms (attempt ${retryCountRef.current}/${maxRetries})`)
+          
+          // Set a temporary loading state and retry after delay
+          setTimeout(() => {
+            if (mounted) {
+              refreshUserRole()
+            }
+          }, RETRY_DELAY)
+          return
+        } else {
+          console.error('❌ useUserRole: Max retries exceeded, falling back to unauthenticated state')
+          setError(`Connection timeout after ${maxRetries} attempts. Please refresh the page.`)
+          setRole(null)
+          setIsAuthenticated(false)
+        }
+      } else {
+        setError(errorMessage)
+        setRole(null)
+        setIsAuthenticated(false)
+      }
     } finally {
       console.log('✅ useUserRole: Role refresh complete')
       setLoading(false)
@@ -77,24 +127,35 @@ export function useUserRole(): UseUserRoleState {
 
   useEffect(() => {
     setMounted(true)
-    refreshUserRole()
+    
+    // Add a small delay to prevent SSR issues
+    const initTimeout = setTimeout(() => {
+      refreshUserRole()
+    }, 100)
 
     // Listen for auth state changes
     const supabase = getSupabaseClient()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 useUserRole: Auth state changed:', event)
+      
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        // Reset retry count on successful auth events
+        retryCountRef.current = 0
         await refreshUserRole()
       } else if (event === 'SIGNED_OUT') {
         setRole(null)
         setIsAuthenticated(false)
         setError(null)
         setLoading(false)
+        retryCountRef.current = 0
       }
     })
 
     // Cleanup function
     return () => {
+      clearTimeout(initTimeout)
       subscription.unsubscribe()
+      setMounted(false)
     }
   }, [])
 
