@@ -135,9 +135,9 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
       console.log('Analyzing vocabulary for text:', text.substring(0, 100) + '...')
       analyzeVocabulary(text)
     } else {
-      // Use sample data for demonstration
-      console.log('Using sample vocabulary data')
-      setEnhancement(SAMPLE_ENHANCEMENT)
+      // No text provided - don't show any enhancement data
+      console.log('No text provided - clearing vocabulary data')
+      setEnhancement(null)
     }
   }, [text, targetLevel])
 
@@ -162,11 +162,47 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
         setEnhancement(sanitizedResult)
       } else {
         console.error('Failed to analyze vocabulary')
-        setEnhancement(SAMPLE_ENHANCEMENT) // Fallback to sample data
+        // Create a minimal enhancement object with actual word count
+        const wordCount = (textToAnalyze.match(/\b\w+\b/g) || []).length
+        const minimalEnhancement: VocabularyEnhancement = {
+          analysis: {
+            totalWords: wordCount,
+            uniqueWords: 0,
+            academicWords: 0,
+            informalWords: 0,
+            repetitiveWords: [],
+            vocabularyDiversity: 0,
+            academicLevel: 'elementary',
+            suggestions: []
+          },
+          overallScore: 0,
+          strengths: [],
+          improvementAreas: ['Analysis temporarily unavailable'],
+          recommendations: ['Please try again later']
+        }
+        setEnhancement(minimalEnhancement)
       }
     } catch (error) {
       console.error('Error analyzing vocabulary:', error)
-      setEnhancement(SAMPLE_ENHANCEMENT) // Fallback to sample data
+      // Create a minimal enhancement object with actual word count
+      const wordCount = (textToAnalyze.match(/\b\w+\b/g) || []).length
+      const minimalEnhancement: VocabularyEnhancement = {
+        analysis: {
+          totalWords: wordCount,
+          uniqueWords: 0,
+          academicWords: 0,
+          informalWords: 0,
+          repetitiveWords: [],
+          vocabularyDiversity: 0,
+          academicLevel: 'elementary',
+          suggestions: []
+        },
+        overallScore: 0,
+        strengths: [],
+        improvementAreas: ['Analysis temporarily unavailable'],
+        recommendations: ['Please try again later']
+      }
+      setEnhancement(minimalEnhancement)
     }
   }, [targetLevel])
 
