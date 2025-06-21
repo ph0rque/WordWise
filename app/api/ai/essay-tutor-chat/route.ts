@@ -72,19 +72,26 @@ const WRITING_CONCEPTS = [
 ]
 
 export async function POST(request: NextRequest) {
+  console.log('🤖 AI Tutor Chat API called')
+
   try {
-    // Get authenticated user using server-side authentication
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !user) {
+    // Parse request body with error handling
+    let body
+    try {
+      body = await request.json()
+      console.log('📥 Request body parsed:', { 
+        hasMessage: !!body.message, 
+        hasDocumentId: !!body.documentId,
+        messageLength: body.message?.length || 0
+      })
+    } catch (parseError) {
+      console.error('❌ Error parsing request body:', parseError)
       return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
+        { error: 'Invalid request body. Please check your data and try again.' },
+        { status: 400 }
       )
     }
 
-    const body = await request.json()
     const { 
       sessionId, 
       message, 
@@ -95,44 +102,97 @@ export async function POST(request: NextRequest) {
       messageHistory = [] 
     } = body
 
-    // Validate required fields
-    if (!message) {
+    // Validate required fields with detailed logging
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      console.log('❌ Invalid message:', { message })
       return NextResponse.json(
-        { error: 'Message is required' },
+        { error: 'Please enter a message to continue the conversation.' },
         { status: 400 }
       )
     }
 
     if (!documentId) {
+      console.log('❌ Missing documentId')
       return NextResponse.json(
-        { error: 'Document ID is required for session management' },
+        { error: 'Document ID is required. Please make sure you have a document open.' },
         { status: 400 }
       )
     }
 
-    // Check if OpenAI API key is available
+    // Check environment variables
     if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ Missing OpenAI API key')
       return NextResponse.json(
-        { error: 'AI tutoring service is not available' },
+        { error: 'AI tutoring service is temporarily unavailable. Please try again later.' },
         { status: 503 }
       )
     }
 
-    // Initialize session manager with server-side Supabase client
-    const sessionManager = new ChatSessionManager(supabase)
-    
-    // Get or create chat session
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('❌ Missing Supabase credentials')
+      return NextResponse.json(
+        { error: 'Database connection is not available. Please try again later.' },
+        { status: 503 }
+      )
+    }
+
+    // Get authenticated user with detailed error handling
+    let supabase
+    let user
+    try {
+      console.log('🔐 Creating Supabase client...')
+      supabase = await createClient()
+      console.log('✅ Supabase client created')
+      
+      console.log('👤 Getting user authentication...')
+      const { data: userData, error: authError } = await supabase.auth.getUser()
+      
+      if (authError) {
+        console.error('❌ Authentication error:', authError)
+        return NextResponse.json(
+          { error: 'Please sign in to use the AI tutor.' },
+          { status: 401 }
+        )
+      }
+
+      if (!userData.user) {
+        console.log('❌ No user found in session')
+        return NextResponse.json(
+          { error: 'Please sign in to use the AI tutor.' },
+          { status: 401 }
+        )
+      }
+
+      user = userData.user
+      console.log('✅ User authenticated:', user.id)
+
+    } catch (authSetupError) {
+      console.error('❌ Error setting up authentication:', authSetupError)
+      return NextResponse.json(
+        { error: 'Authentication setup failed. Please refresh the page and try again.' },
+        { status: 500 }
+      )
+    }
+
+    // Initialize session manager with error handling
+    let sessionManager
     let chatSession
     try {
+      console.log('💬 Initializing chat session manager...')
+      sessionManager = new ChatSessionManager(supabase)
+      
+      console.log('📝 Getting or creating chat session...')
       chatSession = await sessionManager.getOrCreateSession(
         user.id,
         documentId,
         documentTitle ? `Chat: ${documentTitle}` : 'AI Tutor Chat'
       )
-    } catch (error) {
-      console.error('Error managing chat session:', error)
+      console.log('✅ Chat session ready:', chatSession.id)
+
+    } catch (sessionError) {
+      console.error('❌ Error with chat session:', sessionError)
       return NextResponse.json(
-        { error: 'Failed to manage chat session' },
+        { error: 'Unable to create chat session. Please try again.' },
         { status: 500 }
       )
     }
@@ -157,7 +217,21 @@ export async function POST(request: NextRequest) {
     )
 
     if (isContentWritingRequest) {
-      return NextResponse.json({
+      console.log('🚫 Content writing request detected, sending educational response')
+      
+      // Save user message
+      try {
+        await sessionManager.addMessage(
+          chatSession.id,
+          'user',
+          message,
+          { status: 'delivered' }
+        )
+      } catch (saveError) {
+        console.error('⚠️ Warning: Could not save user message:', saveError)
+      }
+
+      const educationalResponse = {
         content: "I can't write your essay or assignment for you, but I can help you become a better writer! Instead, let me guide you through the writing process. What specific aspect of writing would you like to work on? For example:\n\n• How to develop a strong thesis statement\n• Organizing your ideas into clear paragraphs\n• Finding and integrating evidence\n• Improving your academic writing style\n\nWhat would be most helpful for you right now?",
         confidence: 95,
         suggestedQuestions: [
@@ -166,40 +240,66 @@ export async function POST(request: NextRequest) {
           "How should I organize my essay?",
           "What's the best way to conclude my essay?"
         ],
-        relatedConcepts: ["academic integrity", "writing process", "essay structure"]
-      })
+        relatedConcepts: ["academic integrity", "writing process", "essay structure"],
+        sessionId: chatSession.id,
+        timestamp: new Date().toISOString()
+      }
+
+      // Save AI response
+      try {
+        await sessionManager.addMessage(
+          chatSession.id,
+          'assistant',
+          educationalResponse.content,
+          {
+            confidence: educationalResponse.confidence,
+            suggestedQuestions: educationalResponse.suggestedQuestions,
+            relatedConcepts: educationalResponse.relatedConcepts,
+            status: 'delivered'
+          }
+        )
+      } catch (saveError) {
+        console.error('⚠️ Warning: Could not save AI response:', saveError)
+      }
+
+      return NextResponse.json(educationalResponse)
     }
 
     // Save user message to database
     try {
+      console.log('💾 Saving user message...')
       await sessionManager.addMessage(
         chatSession.id,
         'user',
         message,
         { status: 'delivered' }
       )
+      console.log('✅ User message saved')
     } catch (error) {
-      console.error('Error saving user message:', error)
+      console.error('⚠️ Warning: Could not save user message:', error)
       // Continue processing even if message saving fails
     }
 
     // Get recent conversation history from database
     let conversationHistory: any[] = []
     try {
-      const recentMessages = await sessionManager.getSessionMessages(chatSession.id, 16) // Get last 16 messages
+      console.log('📚 Fetching conversation history...')
+      const recentMessages = await sessionManager.getSessionMessages(chatSession.id, 16)
       conversationHistory = recentMessages
         .slice(-8) // Use last 8 messages for context
         .map(msg => ({
           role: msg.messageType === 'user' ? 'user' : 'assistant',
           content: msg.content
         }))
+      console.log('✅ Conversation history loaded:', conversationHistory.length, 'messages')
     } catch (error) {
-      console.error('Error fetching conversation history:', error)
+      console.error('⚠️ Warning: Could not fetch conversation history:', error)
       // Fall back to provided messageHistory if database fetch fails
       conversationHistory = messageHistory.slice(-8).map((msg: ChatMessage) => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
         content: msg.content
       }))
+      console.log('📋 Using fallback message history:', conversationHistory.length, 'messages')
     }
 
     // Add document context if available
@@ -214,24 +314,68 @@ export async function POST(request: NextRequest) {
         : documentContent
       
       contextPrompt = `\n\nSTUDENT'S CURRENT DOCUMENT: "${documentTitle}" (${wordCount} words, ${charCount} characters)\n\nCURRENT CONTENT:\n"${contentPreview}"\n\nYou can reference this specific content to provide targeted guidance about structure, clarity, writing techniques, or specific improvements. Help the student improve what they've written, but do not write content for them.`
+      
+      console.log('📄 Document context added:', { wordCount, charCount, previewLength: contentPreview.length })
     }
 
     // Prepare the prompt
     const fullPrompt = TUTOR_SYSTEM_PROMPT + contextPrompt
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: fullPrompt },
-        ...conversationHistory,
-        { role: 'user', content: message }
-      ],
-      max_tokens: 500,
-      temperature: 0.7,
-      presence_penalty: 0.1,
-      frequency_penalty: 0.1,
-    })
+    // Call OpenAI API with comprehensive error handling
+    let completion
+    try {
+      console.log('🤖 Calling OpenAI API...')
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: fullPrompt },
+          ...conversationHistory,
+          { role: 'user', content: message }
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1,
+      })
+      console.log('✅ OpenAI API response received')
+      
+    } catch (openaiError) {
+      console.error('❌ OpenAI API error:', openaiError)
+      
+      // Return helpful fallback response
+      const fallbackResponse = {
+        content: "I'm having trouble connecting to the AI service right now. While I get that sorted out, here are some general writing tips:\n\n• Start with a clear thesis statement\n• Use topic sentences to introduce each paragraph\n• Support your points with specific evidence\n• Connect your ideas with transitions\n\nIs there a specific writing challenge you'd like help with?",
+        confidence: 0,
+        suggestedQuestions: [
+          "How can I improve my essay structure?",
+          "What makes good academic writing?",
+          "How do I write better topic sentences?"
+        ],
+        relatedConcepts: ["writing help", "essay structure"],
+        error: true,
+        sessionId: chatSession.id,
+        timestamp: new Date().toISOString()
+      }
+
+      // Try to save the fallback response
+      try {
+        await sessionManager.addMessage(
+          chatSession.id,
+          'assistant',
+          fallbackResponse.content,
+          {
+            confidence: 0,
+            suggestedQuestions: fallbackResponse.suggestedQuestions,
+            relatedConcepts: fallbackResponse.relatedConcepts,
+            status: 'error'
+          }
+        )
+      } catch (saveError) {
+        console.error('⚠️ Warning: Could not save fallback response:', saveError)
+      }
+
+      return NextResponse.json(fallbackResponse, { status: 200 }) // Return 200 to prevent "Failed to fetch"
+    }
 
     const response = completion.choices[0]?.message?.content || 'I apologize, but I had trouble generating a response. Please try asking your question again.'
 
@@ -253,8 +397,18 @@ export async function POST(request: NextRequest) {
       85 + (response.length > 100 ? 5 : 0) + (relatedConcepts.length > 0 ? 5 : 0)
     ))
 
+    const finalResponse = {
+      content: response,
+      confidence,
+      suggestedQuestions,
+      relatedConcepts,
+      sessionId: chatSession.id,
+      timestamp: new Date().toISOString()
+    }
+
     // Save AI response to database
     try {
+      console.log('💾 Saving AI response...')
       await sessionManager.addMessage(
         chatSession.id,
         'assistant',
@@ -266,26 +420,21 @@ export async function POST(request: NextRequest) {
           status: 'delivered'
         }
       )
+      console.log('✅ AI response saved')
     } catch (error) {
-      console.error('Error saving AI response:', error)
+      console.error('⚠️ Warning: Could not save AI response:', error)
       // Continue and return response even if saving fails
     }
 
-    return NextResponse.json({
-      content: response,
-      confidence,
-      suggestedQuestions,
-      relatedConcepts,
-      sessionId: chatSession.id,
-      timestamp: new Date().toISOString()
-    })
+    console.log('✅ AI Tutor response completed successfully')
+    return NextResponse.json(finalResponse)
 
   } catch (error) {
-    console.error('Error in essay tutor chat:', error)
+    console.error('❌ Unexpected error in AI tutor chat:', error)
     
-    // Return helpful error message
-    return NextResponse.json({
-      content: "I'm having trouble responding right now. Please try again in a moment. If the problem persists, you might want to check your internet connection or try refreshing the page.",
+    // Return helpful error message that won't cause "Failed to fetch"
+    const errorResponse = {
+      content: "I'm having trouble responding right now. This might be a temporary issue. Please try:\n\n• Refreshing the page\n• Checking your internet connection\n• Trying again in a moment\n\nIf the problem continues, you can still work on your writing and try the AI tutor again later!",
       confidence: 0,
       suggestedQuestions: [
         "How can I improve my essay structure?",
@@ -293,7 +442,11 @@ export async function POST(request: NextRequest) {
         "How do I write better topic sentences?"
       ],
       relatedConcepts: ["writing help", "technical issues"],
-      error: true
-    }, { status: 500 })
+      error: true,
+      timestamp: new Date().toISOString()
+    }
+    
+    // Always return 200 status to prevent "Failed to fetch" errors
+    return NextResponse.json(errorResponse, { status: 200 })
   }
 } 

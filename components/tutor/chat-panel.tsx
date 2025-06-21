@@ -122,6 +122,12 @@ export function ChatPanel({
     setError(null)
 
     try {
+      console.log('🚀 Sending message to AI tutor:', {
+        hasDocumentId: !!documentId,
+        hasDocumentContent: !!documentContent,
+        messageLength: inputMessage.trim().length
+      })
+
       const response = await fetch('/api/ai/essay-tutor-chat', {
         method: 'POST',
         headers: {
@@ -138,43 +144,79 @@ export function ChatPanel({
         }),
       })
 
+      console.log('📡 API response status:', response.status, response.statusText)
+
+      // Check if response is ok
       if (!response.ok) {
-        throw new Error(`Failed to get response: ${response.status}`)
+        const errorText = await response.text()
+        console.error('❌ API error response:', errorText)
+        throw new Error(`Server error (${response.status}): ${response.statusText}`)
       }
 
-      const data = await response.json()
+      // Parse response
+      let data
+      try {
+        data = await response.json()
+        console.log('✅ API response parsed successfully')
+      } catch (parseError) {
+        console.error('❌ Error parsing API response:', parseError)
+        throw new Error('Invalid response from server. Please try again.')
+      }
+
+      // Check if the response indicates an error (even with 200 status)
+      if (data.error) {
+        console.log('⚠️ API returned error flag:', data.error)
+        setError(data.content || 'The AI tutor encountered an issue. Please try again.')
+      }
       
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         type: 'assistant',
-        content: data.content,
+        content: data.content || 'I apologize, but I had trouble generating a response.',
         timestamp: new Date(),
-        status: 'delivered',
+        status: data.error ? 'error' : 'delivered',
         metadata: {
-          confidence: data.confidence || 85,
+          confidence: data.confidence || 0,
           relatedConcepts: data.relatedConcepts || []
         }
       }
 
       setMessages(prev => [...prev, assistantMessage])
+      console.log('✅ Message exchange completed successfully')
 
     } catch (error) {
-      console.error('Error sending message:', error)
-      setError('Sorry, I had trouble responding. Please try again.')
+      console.error('❌ Error in sendMessage:', error)
       
-      const errorMessage: ChatMessage = {
+      // Determine the type of error and provide appropriate feedback
+      let errorMessage = 'Sorry, I had trouble responding. Please try again.'
+      
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        errorMessage = 'Connection issue detected. Please check your internet connection and try again.'
+      } else if (error instanceof Error) {
+        // Use the error message if it's user-friendly
+        if (error.message.includes('Server error') || 
+            error.message.includes('Invalid response') ||
+            error.message.includes('Connection')) {
+          errorMessage = error.message
+        }
+      }
+      
+      setError(errorMessage)
+      
+      // Add error message to chat
+      const errorMessage_chat: ChatMessage = {
         id: `error-${Date.now()}`,
         type: 'system',
-        content: 'Failed to send message. Please try again.',
+        content: `Error: ${errorMessage}`,
         timestamp: new Date(),
         status: 'error'
       }
       
-      setMessages(prev => [...prev, errorMessage])
+      setMessages(prev => [...prev, errorMessage_chat])
     } finally {
       setIsLoading(false)
     }
-  }, [inputMessage, isLoading, aiAvailable, sessionId, documentContent, documentTitle, isStudent, messages])
+  }, [inputMessage, isLoading, aiAvailable, sessionId, documentContent, documentTitle, isStudent, messages, documentId])
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

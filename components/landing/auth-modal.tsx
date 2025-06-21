@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -125,6 +125,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={handleModalClose}>
       <DialogContent className="max-w-md p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>WordWise Authentication</DialogTitle>
+        </DialogHeader>
         <Card className="border-none shadow-none">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-emerald-600">WordWise</CardTitle>
