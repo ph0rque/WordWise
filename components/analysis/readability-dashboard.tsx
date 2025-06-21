@@ -156,8 +156,7 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
     if (grade <= 6) return 'Elementary Students (Grades K-6)'
     if (grade <= 8) return 'Middle School Students (Grades 7-8)'
     if (grade <= 12) return 'High School Students (Grades 9-12)'
-    if (grade <= 16) return 'College Students'
-    return 'Graduate Level'
+    return 'Adult Level'
   }
 
   // Sample data for demonstration when no real data is provided

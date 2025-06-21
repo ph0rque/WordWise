@@ -73,7 +73,7 @@ describe('Vocabulary Analysis', () => {
       const collegeAnalysis = analyzeVocabulary(collegeText, 'college')
       
       expect(elementaryAnalysis.academicLevel).toBe('elementary')
-      expect(collegeAnalysis.academicLevel).toMatch(/college|graduate/)
+      expect(collegeAnalysis.academicLevel).toBe('adult')
     })
 
     it('should generate vocabulary suggestions', () => {

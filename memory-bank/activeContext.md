@@ -73,6 +73,7 @@ WordWise is a functional grammar-checking application with core features impleme
      - Maintained original formula calculations but applied realistic scaling for final grade level
    - **Files Modified**: `lib/analysis/readability.ts`
    - **Impact**: ✅ Grade level analysis now accurately reflects actual student writing difficulty (3rd grade → ~3-4, 8th grade → ~7-9, 11th grade → ~10-12)
+   - **Enhanced**: Changed reading level classification so grade 13+ shows as "Adult" instead of "College"/"Graduate" for better UX
 
 2. **Fixed Tab Switching AND App Switching Reload Issue** ✅ **ENHANCED**
    - **Problem Resolved**: App was reloading when switching tabs away and back OR when switching to other apps and returning

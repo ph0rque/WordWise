@@ -24,7 +24,7 @@ export interface ReadabilityMetrics {
   
   // Grade level assessments
   recommendedGradeLevel: number
-  readingLevel: 'elementary' | 'middle-school' | 'high-school' | 'college' | 'graduate'
+  readingLevel: 'elementary' | 'middle-school' | 'high-school' | 'adult'
   appropriateForLevel: boolean
 }
 
@@ -315,12 +315,11 @@ function calibrateGradeLevelForStudents(
 /**
  * Determine reading level from grade level score
  */
-function getReadingLevel(gradeLevel: number): 'elementary' | 'middle-school' | 'high-school' | 'college' | 'graduate' {
+function getReadingLevel(gradeLevel: number): 'elementary' | 'middle-school' | 'high-school' | 'adult' {
   if (gradeLevel < 6) return 'elementary'
   if (gradeLevel < 9) return 'middle-school'
   if (gradeLevel < 13) return 'high-school'
-  if (gradeLevel < 16) return 'college'
-  return 'graduate'
+  return 'adult' // Grade 13+ is adult level
 }
 
 /**
