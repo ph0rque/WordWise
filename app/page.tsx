@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { TextEditor } from "@/components/text-editor"
 import { EnhancedAuthForm } from "@/components/auth/enhanced-auth-form"
 import { DemoEditor } from "@/components/demo-editor"
-import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client"
+import { isSupabaseConfigured, getSupabaseClient, getCachedSupabaseSession } from "@/lib/supabase/client"
 import type { Document } from "@/lib/types"
 import { User as SupabaseUser } from "@supabase/supabase-js"
 import { DocumentManager } from "@/components/document-manager"
@@ -24,6 +24,13 @@ import { RightSidebar } from "@/components/sidebar/right-sidebar"
 import { checkAIAvailability } from "@/lib/client-grammar-checker"
 import { cn } from "@/lib/utils"
 import LandingPage from "@/components/landing/landing-page"
+
+// Extend Window interface to include custom property
+declare global {
+  interface Window {
+    shouldSuppressRefresh?: () => boolean
+  }
+}
 
 function SearchParamsHandler({ onRedirectTo }: { onRedirectTo: (redirectTo: string | null) => void }) {
   const searchParams = useSearchParams()
@@ -156,8 +163,14 @@ export default function Page() {
 
   useEffect(() => {
     const initializeAuth = async () => {
+      // Check if refreshes should be suppressed (for quick app/tab switches)
+      if (typeof window !== 'undefined' && window.shouldSuppressRefresh?.()) {
+        console.log('🚫 Auth initialization suppressed due to quick app/tab switch')
+        return
+      }
+
       try {
-        console.log("🔄 Starting auth initialization...")
+        console.log("🔄 Starting optimized auth initialization...")
         
         // Check if Supabase is configured
         if (!isSupabaseConfigured()) {
@@ -170,17 +183,17 @@ export default function Page() {
         console.log("✅ Supabase is configured")
         const supabase = getSupabaseClient()
         setSupabaseAvailable(true)
-        console.log("Supabase configured, initializing auth...")
+        console.log("Supabase configured, checking cached session...")
 
-        // Simple session check without timeout
-        console.log("🔍 Getting session...")
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        // Use cached session to prevent unnecessary API calls
+        console.log("🔍 Getting cached session...")
+        const { data: { session }, error: sessionError } = await getCachedSupabaseSession()
         
         if (sessionError) {
           console.error("❌ Session error:", sessionError)
           setUser(null)
         } else {
-          console.log("✅ Session retrieved:", session?.user?.email || "No user")
+          console.log("✅ Cached session retrieved:", session?.user?.email || "No user")
           setUser(session?.user || null)
         }
 

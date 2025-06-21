@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { getCurrentUserWithRoleFromSession } from '@/lib/auth/roles'
-import { getSupabaseClient } from '@/lib/supabase/client'
+import { getSupabaseClient, getCachedSupabaseSession } from '@/lib/supabase/client'
 import type { UserRole } from '@/lib/types'
 import { ROLE_PERMISSIONS } from '@/lib/types'
+
+// Extend Window interface to include custom property
+declare global {
+  interface Window {
+    shouldSuppressRefresh?: () => boolean
+  }
+}
 
 export interface UseUserRoleState {
   role: UserRole | null
@@ -17,6 +24,10 @@ export interface UseUserRoleState {
 // Retry constants
 const RETRY_DELAY = 3000 // 3 seconds between retries
 
+// Debounce constants to prevent excessive refreshes on tab switching
+const DEBOUNCE_DELAY = 1000 // 1 second debounce
+let refreshTimeout: NodeJS.Timeout | null = null
+
 /**
  * Custom hook for managing user role state and providing role-based UI utilities
  */
@@ -29,7 +40,24 @@ export function useUserRole(): UseUserRoleState {
   const retryCountRef = useRef(0)
   const maxRetries = 3
 
+  // Debounced refresh function to prevent excessive calls
+  const debouncedRefresh = () => {
+    if (refreshTimeout) {
+      clearTimeout(refreshTimeout)
+    }
+    
+    refreshTimeout = setTimeout(() => {
+      refreshUserRole()
+    }, DEBOUNCE_DELAY)
+  }
+
   const refreshUserRole = async () => {
+    // Check if refreshes should be suppressed (for quick app/tab switches)
+    if (typeof window !== 'undefined' && window.shouldSuppressRefresh?.()) {
+      console.log('🚫 useUserRole: Refresh suppressed due to quick app/tab switch')
+      return
+    }
+
     try {
       console.log('🔄 useUserRole: Starting optimized role refresh...')
       setLoading(true)
@@ -136,10 +164,15 @@ export function useUserRole(): UseUserRoleState {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 useUserRole: Auth state changed:', event)
       
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN') {
         // Reset retry count on successful auth events
         retryCountRef.current = 0
         await refreshUserRole()
+      } else if (event === 'TOKEN_REFRESHED') {
+        // Use debounced refresh for token refreshes to prevent excessive calls
+        console.log('🔄 useUserRole: Token refreshed, using debounced refresh')
+        retryCountRef.current = 0
+        debouncedRefresh()
       } else if (event === 'SIGNED_OUT') {
         setRole(null)
         setIsAuthenticated(false)

@@ -3,6 +3,11 @@ import type { UserRole } from '@/lib/types'
 
 let supabaseInstance: SupabaseClient | null = null
 
+// Session cache to prevent unnecessary re-authentication
+let cachedSession: any = null
+let sessionCacheTime = 0
+const SESSION_CACHE_DURATION = 30000 // 30 seconds
+
 // Helper function to set cookies
 function setCookie(name: string, value: string, days: number = 7) {
   const expires = new Date()
@@ -28,6 +33,27 @@ async function initializeCookiesFromSession(client: SupabaseClient) {
   }
 }
 
+// Helper function to get cached session
+async function getCachedSession(client: SupabaseClient) {
+  const now = Date.now()
+  
+  // Return cached session if it's still valid
+  if (cachedSession && (now - sessionCacheTime) < SESSION_CACHE_DURATION) {
+    return { data: { session: cachedSession }, error: null }
+  }
+  
+  // Fetch fresh session
+  const result = await client.auth.getSession()
+  
+  // Cache successful result
+  if (result.data.session && !result.error) {
+    cachedSession = result.data.session
+    sessionCacheTime = now
+  }
+  
+  return result
+}
+
 export function getSupabaseClient() {
   if (supabaseInstance) {
     return supabaseInstance
@@ -44,6 +70,8 @@ export function getSupabaseClient() {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
+      // Prevent automatic session refresh on window focus
+      detectSessionInUrl: false,
     },
   })
 
@@ -54,11 +82,17 @@ export function getSupabaseClient() {
         // Store tokens in cookies for server-side access
         setCookie('sb-access-token', session.access_token, 7)
         setCookie('sb-refresh-token', session.refresh_token, 7)
+        // Update cache
+        cachedSession = session
+        sessionCacheTime = Date.now()
       }
     } else if (event === 'SIGNED_OUT') {
       // Clear cookies on sign out
       deleteCookie('sb-access-token')
       deleteCookie('sb-refresh-token')
+      // Clear cache
+      cachedSession = null
+      sessionCacheTime = 0
     }
   })
 
@@ -68,6 +102,12 @@ export function getSupabaseClient() {
   }
 
   return supabaseInstance
+}
+
+// Export cached session getter for optimized auth checks
+export async function getCachedSupabaseSession() {
+  const client = getSupabaseClient()
+  return getCachedSession(client)
 }
 
 export function isSupabaseConfigured() {

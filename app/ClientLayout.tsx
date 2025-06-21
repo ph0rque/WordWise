@@ -6,6 +6,7 @@ import { useUserRole } from '@/lib/hooks/use-user-role'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { RefreshCw, Wifi, AlertTriangle } from 'lucide-react'
+import { TabFocusManager } from '@/components/tab-focus-manager'
 
 interface ClientLayoutProps {
   children: React.ReactNode
@@ -151,5 +152,9 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
     )
   }
 
-  return <>{children}</>
+  return (
+    <TabFocusManager>
+      {children}
+    </TabFocusManager>
+  )
 }

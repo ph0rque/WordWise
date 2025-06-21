@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Project State
-WordWise is a functional grammar-checking application with core features implemented. The application is currently operational with both AI-powered and rule-based grammar checking capabilities. **Recent authentication issues have been resolved**, and the admin functionality is now working properly.
+WordWise is a functional grammar-checking application with core features implemented. The application is currently operational with both AI-powered and rule-based grammar checking capabilities. **Recent authentication issues have been resolved**, and the admin functionality is now working properly. **Tab switching performance has been optimized** to prevent unnecessary reloads.
 
 ## Recent Work & Changes
 **December 2024 - Authentication System Fix ✅ COMPLETED**
@@ -58,6 +58,26 @@ WordWise is a functional grammar-checking application with core features impleme
 ## Active Development Focus
 
 ### Recently Completed (Latest Update)
+1. **Fixed Tab Switching AND App Switching Reload Issue** ✅ **ENHANCED**
+   - **Problem Resolved**: App was reloading when switching tabs away and back OR when switching to other apps and returning
+   - **Root Cause**: Aggressive authentication re-initialization and session checking on both tab visibility changes AND window focus/blur events
+   - **Solution Implemented**:
+     - **Session Caching**: Added 30-second session cache in Supabase client to prevent unnecessary auth API calls
+     - **Debounced Auth Refresh**: Implemented 1-second debounce on auth state changes to prevent excessive refreshes
+     - **Smart Focus Management**: Enhanced TabFocusManager to handle both tab switching AND app switching
+     - **Refresh Suppression**: Added global suppression mechanism that prevents any refreshes for 2 seconds after quick switches
+     - **Dual Event Handling**: Properly differentiate between tab switching (visibility) and app switching (focus/blur)
+     - **Optimized Auth Flow**: Use cached sessions and respect suppression flags
+   - **Technical Details**:
+     - Enhanced `TabFocusManager` to track both visibility changes and window focus/blur events
+     - Added `window.shouldSuppressRefresh()` global function to coordinate suppression across components
+     - Track separate timers for tab switching vs app switching with different thresholds
+     - Added suppression checks in `useUserRole` and main auth initialization
+     - Emit custom events (`suppressRefresh`, `longAppReturn`) for component coordination
+   - **Files Modified**: `lib/supabase/client.ts`, `lib/hooks/use-user-role.ts`, `app/page.tsx`, `app/ClientLayout.tsx`, `components/tab-focus-manager.tsx`
+   - **Impact**: ✅ App now maintains state for BOTH tab switching AND app switching, only refreshing after 30+ seconds of absence
+
+### Previously Completed (Earlier Updates)
 1. **Fixed Production Loading Timeout Issue** ✅ **JUST COMPLETED**
    - **Problem Resolved**: Production site getting stuck at "useUserRole: Getting session..." with infinite loading
    - **Root Cause**: Authentication operations hanging indefinitely in production environment without timeouts
