@@ -207,11 +207,13 @@ WordWise is a functional grammar-checking application with core features impleme
    - **Git Status**: Committed as `6ab41d9` and pushed to `
 
 ## Current Work Focus
-**Layout Improvements - Document Manager Integration**
+**Layout Improvements - Document Manager Integration** ✅ **COMPLETED**
 - **COMPLETED**: Removed the "My Documents" panel from the right sidebar
 - **COMPLETED**: Added document list to main panel when no document is selected
 - **COMPLETED**: Added X button to close/unselect documents
-- **COMPLETED**: Resolved TypeScript errors (builds successfully with only warnings)
+- **COMPLETED**: Right-justified Save button and three dots menu
+- **COMPLETED**: Expanded document list to full container height
+- **COMPLETED**: Committed and merged to main branch
 
 ## Recent Changes Made
 1. **Layout Restructuring**:
@@ -225,35 +227,35 @@ WordWise is a functional grammar-checking application with core features impleme
    - Implemented `handleUnselectDocument` function to return to document list
    - Created cleaner document selection flow
 
-3. **Code Changes**:
+3. **UI Polish**:
+   - Right-justified Save button and three dots menu in document header
+   - Removed duplicate "My Documents" header and "New" button from DocumentManager
+   - Made document list expand to full container height with proper scrolling
+   - Cleaned up unused imports and dialog functionality
+
+4. **Code Changes**:
    - Updated `TextEditorProps` interface to include `onUnselect` callback
    - Modified main page layout to conditionally show document list or editor
    - Removed document manager from sidebar components
+   - Improved flex layout structure for better responsiveness
 
-## Current Status
-- **Build Status**: ✅ Application builds successfully
-- **TypeScript**: Minor warning exists but doesn't prevent functionality
-- **Dev Server**: Running and ready for testing
-- **Layout**: Complete restructuring implemented
+## Git History
+- **Commit**: `e99924b` - "Layout improvements: Remove duplicate My Documents panel and improve document list"
+- **Merged**: Successfully merged stage → main and pushed to remote
+- **Files Changed**: 4 files (105 insertions, 108 deletions)
 
-## Next Steps
-1. **Testing**: Test the new layout flow:
-   - Verify document list shows when no document selected
-   - Test document selection and unselection
-   - Ensure X button works correctly
-   - Verify mobile responsive behavior
-2. **User Experience**: Monitor user feedback on new layout
-3. **Future Enhancements**: Consider transitions or animations if needed
-
-## Success Criteria
+## Success Criteria - All Complete! ✅
 - ✅ No "My Documents" panel in sidebar
 - ✅ Document list appears in main panel when no document selected  
 - ✅ X button closes document and returns to list
+- ✅ Save button and menu right-justified
+- ✅ Document list expands to full height
 - ✅ Application builds and runs successfully
-- 🔄 User experience testing in progress
+- ✅ Changes committed and merged to main
 
 ## Technical Notes
 - The layout change creates a more focused, single-panel experience
 - User workflow: Document List → Select Document → Edit Document → Close Document → Back to List
 - This eliminates the need for a separate document management panel
-- TypeScript warning on line 431 is non-breaking and doesn't affect functionality
+- Full-height document list provides better UX for users with many documents
+- Right-justified controls follow standard UI patterns
