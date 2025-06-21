@@ -3,35 +3,7 @@ import { getSupabaseClient } from '@/lib/supabase/client'
 import type { UserRole, RolePermissions, UserWithRole, User } from '@/lib/types'
 import { ROLE_PERMISSIONS } from '@/lib/types'
 
-/**
- * Auto-assign a pending role to the current user
- * @param pendingRole - The pending role to assign
- */
-async function autoAssignPendingRole(pendingRole: UserRole): Promise<void> {
-  try {
-    const supabase = getSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    if (!session) {
-      console.error('No session available for auto role assignment')
-      return
-    }
 
-    // Direct client-side role assignment
-    console.log('Auto-assigning pending role:', pendingRole)
-    const { error: updateError } = await supabase.auth.updateUser({
-      data: { role: pendingRole }
-    })
-
-    if (updateError) {
-      console.error('Auto role assignment failed:', updateError)
-    } else {
-      console.log('Auto role assignment successful:', pendingRole)
-    }
-  } catch (error) {
-    console.error('Error in auto role assignment:', error)
-  }
-}
 
 /**
  * Get the current user's role from user metadata
@@ -54,36 +26,16 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
       return null
     }
 
-    // Get role from user metadata (set during signup)
+    // Simplified: just get role from user metadata
     const role = user.user_metadata?.role as UserRole
-    
-    // If no role in metadata, check app_metadata (set by admin)
-    const appRole = user.app_metadata?.role as UserRole
-    
-    // Also check for pending_role (during signup process)
-    const pendingRole = user.user_metadata?.pending_role as UserRole
-    
-    const finalRole = role || appRole || null
     
     console.log('getCurrentUserRole debug:', {
       userId: user.id,
       email: user.email,
-      role,
-      appRole,
-      pendingRole,
-      finalRole
+      role
     })
     
-    // If we have a pending role but no actual role, try to auto-assign it
-    if (!finalRole && pendingRole && ['student', 'admin'].includes(pendingRole)) {
-      console.log('Found pending role, attempting auto-assignment:', pendingRole)
-      // Trigger role assignment in the background (don't await to avoid blocking)
-      autoAssignPendingRole(pendingRole).catch((err: any) => 
-        console.error('Auto role assignment failed:', err)
-      )
-    }
-    
-    return finalRole // Return null if no role is set instead of defaulting to student
+    return role || null
   } catch (error) {
     console.error('Error getting user role:', error)
     
@@ -110,7 +62,7 @@ export async function getCurrentUserWithRole(): Promise<UserWithRole | null> {
     }
 
     // Get role from user metadata
-    const role = (user.user_metadata?.role || user.app_metadata?.role) as UserRole
+    const role = user.user_metadata?.role as UserRole
     if (!role) {
       return null // Return null if no role is assigned
     }
@@ -412,7 +364,7 @@ export async function checkRoleAuth(request: Request, requiredRole: UserRole) {
     }
 
     // Check user role from metadata
-    const userRole = (user.user_metadata?.role || user.app_metadata?.role || 'student') as UserRole
+    const userRole = user.user_metadata?.role as UserRole
     
     // Check if user has required role
     if (requiredRole === 'admin' && userRole !== 'admin') {

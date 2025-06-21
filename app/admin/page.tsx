@@ -99,10 +99,15 @@ export default function AdminDashboard() {
 
   const loadStudents = async () => {
     try {
+      // Add a small delay to ensure authentication is fully ready
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       const response = await fetch('/api/admin/students')
       
       if (!response.ok) {
-        throw new Error('Failed to fetch students')
+        const errorText = await response.text()
+        console.error('Students API error:', response.status, errorText)
+        throw new Error(`Failed to fetch students: ${response.status}`)
       }
 
       const data = await response.json()
@@ -122,10 +127,15 @@ export default function AdminDashboard() {
 
   const loadAdminStats = async () => {
     try {
+      // Add a small delay to ensure authentication is fully ready
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       const response = await fetch('/api/admin/stats')
       
       if (!response.ok) {
-        throw new Error('Failed to fetch admin stats')
+        const errorText = await response.text()
+        console.error('Stats API error:', response.status, errorText)
+        throw new Error(`Failed to fetch admin stats: ${response.status}`)
       }
 
       const data = await response.json()

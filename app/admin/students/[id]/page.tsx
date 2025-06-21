@@ -26,6 +26,7 @@ import {
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { getCurrentUserRole } from "@/lib/auth/roles"
 import type { UserWithRole, Document } from "@/lib/types"
+import { DocumentViewer } from "@/components/admin/document-viewer"
 
 interface StudentDetail extends UserWithRole {
   documentsCount: number
@@ -64,6 +65,8 @@ export default function StudentDetailPage() {
   const [documents, setDocuments] = useState<StudentDocument[]>([])
   const [writingSessions, setWritingSessions] = useState<WritingSession[]>([])
   const [activeTab, setActiveTab] = useState("overview")
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
+  const [showDocumentViewer, setShowDocumentViewer] = useState(false)
   const router = useRouter()
   const params = useParams()
   const studentId = params.id as string
@@ -263,8 +266,8 @@ export default function StudentDetailPage() {
   }
 
   const handleViewDocument = (documentId: string) => {
-    // In a real implementation, this would open the document in a modal or new page
-    console.log('View document:', documentId)
+    setSelectedDocumentId(documentId)
+    setShowDocumentViewer(true)
   }
 
   const handleViewWritingSession = (sessionId: string) => {
@@ -690,6 +693,14 @@ export default function StudentDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Document Viewer Modal */}
+      <DocumentViewer
+        documentId={selectedDocumentId}
+        open={showDocumentViewer}
+        onOpenChange={setShowDocumentViewer}
+        studentEmail={student?.email}
+      />
     </div>
   )
 } 
