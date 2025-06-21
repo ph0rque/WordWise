@@ -3,12 +3,10 @@
 import { useState, useEffect } from "react"
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Card, CardContent } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileText, Plus, MoreVertical, Trash2, Edit, AlertCircle, Database, Lock } from "lucide-react"
+import { FileText, MoreVertical, Trash2, Edit, AlertCircle, Database, Lock } from "lucide-react"
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import type { Document } from "@/lib/types"
 
@@ -302,64 +300,8 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            My Documents
-            {currentRole === 'admin' && (
-              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                Admin
-              </span>
-            )}
-          </CardTitle>
-          {!needsSetup && canCreateDocuments && (
-            <Dialog open={showNewDocDialog} onOpenChange={setShowNewDocDialog}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="h-8">
-                  <Plus className="w-4 h-4 mr-1" />
-                  New
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Document</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Document title"
-                    value={newDocTitle}
-                    onChange={(e) => setNewDocTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && createDocument()}
-                  />
-                  {error && (
-                    <Alert className="border-red-200 bg-red-50">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-red-800">{error}</AlertDescription>
-                    </Alert>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowNewDocDialog(false)
-                        setError("")
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button onClick={createDocument} disabled={!newDocTitle.trim()}>
-                      Create
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
+    <Card className="h-full flex flex-col">
+      <CardContent className="p-0 flex-1 flex flex-col">
         {needsSetup && (
           <div className="p-4 border-b">
             <Alert className="border-blue-200 bg-blue-50">
@@ -394,7 +336,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
         )}
 
         {!needsSetup && documents.length === 0 ? (
-          <div className="p-4 text-center text-slate-500">
+          <div className="p-4 text-center text-slate-500 flex-1 flex flex-col justify-center">
             <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No documents yet</p>
             <Button variant="link" className="text-xs p-0 h-auto mt-1" onClick={() => onNewDocument({} as Document)}>
@@ -402,7 +344,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
             </Button>
           </div>
         ) : !needsSetup ? (
-          <div className="max-h-64 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {documents.map((doc) => (
               <div
                 key={doc.id}

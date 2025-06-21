@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { checkAcademicGrammarClient } from "@/lib/client-academic-grammar-checker"
 import { AutomaticRecorder, AutomaticRecorderRef } from "@/components/keystroke/automatic-recorder"
 import { useUserRole } from "@/lib/hooks/use-user-role"
+import { X } from "lucide-react"
 
 // Extend Window interface for global suggestion storage
 declare global {
@@ -25,6 +26,7 @@ interface TextEditorProps {
   onDelete: (documentId: string) => void
   onNew: () => void
   onSelect: (document: Document) => void
+  onUnselect: () => void
 }
 
 export function TextEditor({
@@ -33,6 +35,7 @@ export function TextEditor({
   onDelete,
   onNew,
   onSelect,
+  onUnselect,
 }: TextEditorProps) {
   const [title, setTitle] = useState(initialDocument.title)
   const [content, setContent] = useState(initialDocument.content)
@@ -605,15 +608,26 @@ export function TextEditor({
   return (
     <div className="flex h-full flex-col relative bg-white min-h-0">
       {/* Header */}
-      <div className="flex items-center gap-4 border-b bg-gray-50/50 p-4 flex-shrink-0">
-        <input
-          type="text"
-          value={title}
-          onChange={handleTitleChange}
-          placeholder="Document title..."
-          className="flex-1 bg-transparent text-2xl font-bold outline-none placeholder:text-gray-400"
-        />
-        <div className="flex items-center gap-2">
+      <div className="flex items-center border-b bg-gray-50/50 p-4 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onUnselect}
+            className="h-8 w-8 p-0 hover:bg-gray-200"
+            title="Close document"
+          >
+            <X className="h-4 w-4 text-gray-500" />
+          </Button>
+          <input
+            type="text"
+            value={title}
+            onChange={handleTitleChange}
+            placeholder="Document title..."
+            className="flex-1 bg-transparent text-2xl font-bold outline-none placeholder:text-gray-400"
+          />
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
           <DocumentActions
             onNew={onNew}
             onSave={handleManualSave}

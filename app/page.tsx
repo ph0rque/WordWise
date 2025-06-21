@@ -13,7 +13,7 @@ import { RoleBasedHeader, RoleBasedNotifications } from "@/components/navigation
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { GraduationCap, AlertCircle, RefreshCw, Loader2, PanelRight } from "lucide-react"
+import { GraduationCap, AlertCircle, RefreshCw, Loader2, PanelRight, Plus } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -83,6 +83,11 @@ export default function Page() {
 
   const handleSelectDocument = (doc: Document) => {
     setCurrentDocument(doc)
+  }
+
+  // Add function to unselect document
+  const handleUnselectDocument = () => {
+    setCurrentDocument(null)
   }
 
   const handleNewDocument = async () => {
@@ -407,22 +412,26 @@ export default function Page() {
                   onDelete={handleDeleteDocument}
                   onNew={handleNewDocument}
                   onSelect={setCurrentDocument}
+                  onUnselect={handleUnselectDocument}
                 />
               ) : (
-                <div className="flex h-full min-h-[500px] items-center justify-center rounded-lg border border-dashed shadow-sm">
-                  <div className="flex flex-col items-center gap-1 text-center">
-                    <h3 className="text-2xl font-bold tracking-tight">
-                      {hasDocuments ? "Select a document to get started" : "No documents found"}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {hasDocuments 
-                        ? "Choose a document from your collection or create a new one."
-                        : "Create your first document to get started."
-                      }
-                    </p>
-                    <Button className="mt-4" onClick={handleNewDocument}>
-                      Create New Document
+                // Show DocumentManager in main panel when no document is selected
+                <div className="flex flex-col gap-4 h-full">
+                  <div className="flex items-center justify-between p-4 border-b bg-gray-50/50">
+                    <h1 className="text-2xl font-bold">My Documents</h1>
+                    <Button onClick={handleNewDocument}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      New Document
                     </Button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <DocumentManager
+                      onSelectDocument={handleSelectDocument}
+                      onNewDocument={setCurrentDocument}
+                      currentDocumentId={currentDocument ? currentDocument.id : undefined}
+                      refreshDocumentsFlag={refreshDocumentsFlag}
+                      onDocumentsLoaded={setHasDocuments}
+                    />
                   </div>
                 </div>
               )}
@@ -434,17 +443,6 @@ export default function Page() {
                     document={currentDocument} 
                     aiAvailable={aiAvailable}
                     onCollapse={() => setIsRightSidebarCollapsed(true)}
-                  />
-                </div>
-                
-                {/* Document Manager positioned under the sidebar */}
-                <div className="flex-shrink-0">
-                  <DocumentManager
-                    onSelectDocument={handleSelectDocument}
-                    onNewDocument={setCurrentDocument}
-                    currentDocumentId={currentDocument?.id}
-                    refreshDocumentsFlag={refreshDocumentsFlag}
-                    onDocumentsLoaded={setHasDocuments}
                   />
                 </div>
               </aside>
@@ -476,15 +474,6 @@ export default function Page() {
           >
             <div className="flex flex-col gap-4 p-4">
               <RightSidebar document={currentDocument} aiAvailable={aiAvailable} />
-              
-              {/* Document Manager for mobile */}
-              <DocumentManager
-                onSelectDocument={handleSelectDocument}
-                onNewDocument={setCurrentDocument}
-                currentDocumentId={currentDocument?.id}
-                refreshDocumentsFlag={refreshDocumentsFlag}
-                onDocumentsLoaded={setHasDocuments}
-              />
             </div>
           </div>
         </div>
