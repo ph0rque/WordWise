@@ -13,46 +13,46 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
   try {
     const supabase = getSupabaseClient()
     
-    // Add timeout to prevent hanging
-    const userPromise = supabase.auth.getUser()
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('User role fetch timed out')), 8000)
-    )
-    
-    const { data: { user }, error: authError } = await Promise.race([userPromise, timeoutPromise])
-    
-    if (authError || !user) {
-      console.error('Error getting authenticated user:', authError)
-      return null
-    }
+    // Single timeout for the entire operation
+    const operationPromise = (async () => {
+      // Get user first
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !user) {
+        console.error('Error getting authenticated user:', authError)
+        return null
+      }
 
-    // Get role from user_roles table instead of metadata
-    const rolePromise = supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single()
+      // Get role from user_roles table
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single()
+      
+      if (roleError) {
+        console.error('Error getting user role from database:', roleError)
+        return null
+      }
+      
+      const role = roleData?.role as UserRole
+      
+      console.log('getCurrentUserRole debug:', {
+        userId: user.id,
+        email: user.email,
+        role
+      })
+      
+      return role || null
+    })()
     
-    const roleTimeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Role fetch timed out')), 8000)
+    // Apply timeout to the entire operation
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('User role fetch timed out')), 10000)
     )
     
-    const { data: roleData, error: roleError } = await Promise.race([rolePromise, roleTimeoutPromise])
+    return await Promise.race([operationPromise, timeoutPromise])
     
-    if (roleError) {
-      console.error('Error getting user role from database:', roleError)
-      return null
-    }
-    
-    const role = roleData?.role as UserRole
-    
-    console.log('getCurrentUserRole debug:', {
-      userId: user.id,
-      email: user.email,
-      role
-    })
-    
-    return role || null
   } catch (error) {
     console.error('Error getting user role:', error)
     

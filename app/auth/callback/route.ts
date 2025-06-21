@@ -22,10 +22,16 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        // Check if user has a role assigned in metadata
-        const userRole = data.user.user_metadata?.role || data.user.app_metadata?.role
+        // Check if user has a role assigned in database table
+        const { data: roleData, error: roleError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', data.user.id)
+          .single()
 
-        console.log('Auth callback - User role:', userRole)
+        const userRole = roleData?.role
+
+        console.log('Auth callback - User role from database:', userRole)
 
         // If user has an assigned role, redirect appropriately
         if (userRole) {

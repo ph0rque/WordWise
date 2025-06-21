@@ -14,8 +14,8 @@ export interface UseUserRoleState {
 }
 
 // Timeout constants
-const SESSION_TIMEOUT = 10000 // 10 seconds max for session operations
-const ROLE_TIMEOUT = 8000 // 8 seconds max for role operations
+const SESSION_TIMEOUT = 8000 // 8 seconds max for session operations
+const ROLE_TIMEOUT = 12000 // 12 seconds max for role operations (includes DB query)
 const RETRY_DELAY = 3000 // 3 seconds between retries
 
 // Helper function to create promises with timeout
