@@ -244,7 +244,9 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
           
           <div className="text-center space-y-1">
             <div className="text-sm text-muted-foreground">Grade Level</div>
-            <div className="text-2xl font-bold">{currentAnalysis.overallGrade.toFixed(1)}</div>
+            <div className="text-2xl font-bold">
+              {currentAnalysis.overallGrade > 12 ? 'Adult' : Math.round(currentAnalysis.overallGrade).toString()}
+            </div>
             <div className="text-xs text-muted-foreground">Target: {targetGradeLevel}th grade</div>
           </div>
         </div>
@@ -266,7 +268,7 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
           
           <div className="text-center space-y-1">
             <div className="text-sm text-muted-foreground">Reading Time</div>
-            <div className="text-lg font-semibold">{currentAnalysis.metrics.readingTimeMinutes.toFixed(1)}m</div>
+            <div className="text-lg font-semibold">{Math.round(currentAnalysis.metrics.readingTimeMinutes)}m</div>
             <div className="text-xs text-muted-foreground">{currentAnalysis.wordCount} words</div>
           </div>
         </div>
