@@ -31,8 +31,15 @@ export async function getCurrentUserWithRoleFromSession(): Promise<{ user: UserW
     
     // Get session (includes user data)
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session?.user) {
+    
+    // If there's an actual error (not just null session), log it
+    if (sessionError) {
       console.error('Error getting session:', sessionError)
+      return null
+    }
+    
+    // If no session or user, return null (this is normal during logout)
+    if (!session?.user) {
       return null
     }
 
