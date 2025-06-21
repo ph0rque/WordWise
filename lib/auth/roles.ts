@@ -6,7 +6,7 @@ import { ROLE_PERMISSIONS } from '@/lib/types'
 
 
 /**
- * Get the current user's role from user metadata
+ * Get the current user's role from the user_roles database table
  * @returns Promise<UserRole | null> - The user's role or null if not authenticated
  */
 export async function getCurrentUserRole(): Promise<UserRole | null> {
@@ -26,8 +26,25 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
       return null
     }
 
-    // Simplified: just get role from user metadata
-    const role = user.user_metadata?.role as UserRole
+    // Get role from user_roles table instead of metadata
+    const rolePromise = supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+    
+    const roleTimeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Role fetch timed out')), 8000)
+    )
+    
+    const { data: roleData, error: roleError } = await Promise.race([rolePromise, roleTimeoutPromise])
+    
+    if (roleError) {
+      console.error('Error getting user role from database:', roleError)
+      return null
+    }
+    
+    const role = roleData?.role as UserRole
     
     console.log('getCurrentUserRole debug:', {
       userId: user.id,
@@ -61,11 +78,18 @@ export async function getCurrentUserWithRole(): Promise<UserWithRole | null> {
       return null
     }
 
-    // Get role from user metadata
-    const role = user.user_metadata?.role as UserRole
-    if (!role) {
+    // Get role from user_roles table
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+    
+    if (roleError || !roleData) {
       return null // Return null if no role is assigned
     }
+    
+    const role = roleData.role as UserRole
     const permissions = ROLE_PERMISSIONS[role]
 
     return {
@@ -215,9 +239,8 @@ export async function completeOnboarding(
       return { user: null, error: 'No authenticated user found' }
     }
     
-    // Prepare update data
+    // Prepare update data (for user metadata - name and consent only)
     const updateData: any = {
-      role,
       has_consented_to_keystrokes: hasConsented,
     }
     
@@ -232,6 +255,24 @@ export async function completeOnboarding(
       updateData.display_name = existingDisplayName
     }
     
+    // Save role to user_roles table FIRST (primary source of truth)
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .upsert({
+        user_id: currentUser.id,
+        role: role
+      }, {
+        onConflict: 'user_id'
+      })
+
+    if (roleError) {
+      console.error('Error saving role to user_roles table:', roleError)
+      return { user: null, error: roleError }
+    }
+
+    console.log(`Successfully assigned ${role} role to user ${currentUser.id} in user_roles table`)
+
+    // Update user metadata (for name and consent only)
     const {
       data: { user },
       error: userError,
@@ -240,35 +281,12 @@ export async function completeOnboarding(
     })
 
     if (userError) {
-      console.error('Error completing onboarding:', userError)
+      console.error('Error updating user metadata:', userError)
       return { user: null, error: userError }
     }
 
     if (!user) {
       return { user: null, error: 'No user returned after update.' }
-    }
-
-    // CRITICAL: Also save the role to user_roles table
-    // This ensures API endpoints can check roles properly
-    try {
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .upsert({
-          user_id: user.id,
-          role: role
-        }, {
-          onConflict: 'user_id'
-        })
-
-      if (roleError) {
-        console.error('Error saving role to user_roles table:', roleError)
-        // Continue despite error - user metadata was updated successfully
-      } else {
-        console.log(`Successfully assigned ${role} role to user ${user.id} in user_roles table`)
-      }
-    } catch (roleTableError) {
-      console.error('Exception saving to user_roles table:', roleTableError)
-      // Continue despite error - user metadata was updated successfully
     }
 
     // Adapt Supabase user to our local User type
@@ -363,8 +381,18 @@ export async function checkRoleAuth(request: Request, requiredRole: UserRole) {
       return { authorized: false, error: 'Invalid token or user not found' }
     }
 
-    // Check user role from metadata
-    const userRole = user.user_metadata?.role as UserRole
+    // Check user role from database
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+    
+    if (roleError || !roleData) {
+      return { authorized: false, error: 'No role assigned' }
+    }
+    
+    const userRole = roleData.role as UserRole
     
     // Check if user has required role
     if (requiredRole === 'admin' && userRole !== 'admin') {
