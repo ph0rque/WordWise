@@ -6,14 +6,14 @@ import { TextEditor } from "@/components/text-editor"
 import { EnhancedAuthForm } from "@/components/auth/enhanced-auth-form"
 import { DemoEditor } from "@/components/demo-editor"
 import { isSupabaseConfigured, getSupabaseClient, getCachedSupabaseSession } from "@/lib/supabase/client"
-import type { Document } from "@/lib/types"
+import type { Document, UserWithRole } from "@/lib/types"
 import { User as SupabaseUser } from "@supabase/supabase-js"
 import { DocumentManager } from "@/components/document-manager"
 import { RoleBasedHeader, RoleBasedNotifications } from "@/components/navigation/role-based-header"
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { GraduationCap, AlertCircle, RefreshCw, Loader2, PanelRight, Plus } from "lucide-react"
+import { GraduationCap, AlertCircle, RefreshCw, Loader2, Plus, PanelRight } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -421,10 +421,24 @@ export default function Page() {
                 <div className="flex flex-col gap-4 h-full">
                   <div className="flex items-center justify-between p-4 border-b bg-gray-50/50">
                     <h1 className="text-2xl font-bold">My Documents</h1>
-                    <Button onClick={handleNewDocument}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      New Document
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleNewDocument}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Document
+                      </Button>
+                      {/* Right sidebar expand button - only show when collapsed */}
+                      {isRightSidebarCollapsed && (
+                        <Button
+                          onClick={() => setIsRightSidebarCollapsed(false)}
+                          size="sm"
+                          variant="ghost"
+                          className="h-10 w-10 p-0 hover:bg-gray-200"
+                          title="Show writing tools and analysis"
+                        >
+                          <PanelRight className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4">
                     <DocumentManager
