@@ -59,29 +59,36 @@ export function DocumentSwitcherDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[425px] max-h-[80vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Switch Document</DialogTitle>
           <DialogDescription>
             Select a document to continue editing.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-4">
+        <div className="flex-1 overflow-y-auto min-h-0 py-4">
           {loading ? (
             <div className="flex justify-center">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
+          ) : documents.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No documents found</p>
+              <p className="text-sm text-gray-500 mt-1">Create a new document to get started</p>
+            </div>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-2 pr-2">
               {documents.map((doc) => (
                 <li key={doc.id}>
                   <Button
                     variant={doc.id === currentDocumentId ? "secondary" : "ghost"}
-                    className="w-full justify-start"
+                    className="w-full justify-start text-left h-auto py-3 px-3 hover:bg-gray-50 transition-colors"
                     onClick={() => handleSelect(doc)}
+                    title={doc.title}
                   >
-                    <FileText className="mr-2 h-4 w-4" />
-                    {doc.title}
+                    <FileText className="mr-3 h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{doc.title || "Untitled Document"}</span>
                   </Button>
                 </li>
               ))}
