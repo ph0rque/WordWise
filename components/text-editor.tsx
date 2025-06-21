@@ -12,6 +12,7 @@ import { checkAcademicGrammarClient } from "@/lib/client-academic-grammar-checke
 import { AutomaticRecorder, AutomaticRecorderRef } from "@/components/keystroke/automatic-recorder"
 import { useUserRole } from "@/lib/hooks/use-user-role"
 import { X } from "lucide-react"
+import { PanelRight } from "lucide-react"
 
 // Extend Window interface for global suggestion storage
 declare global {
@@ -27,6 +28,8 @@ interface TextEditorProps {
   onNew: () => void
   onSelect: (document: Document) => void
   onUnselect: () => void
+  isRightSidebarCollapsed?: boolean
+  onExpandRightSidebar?: () => void
 }
 
 export function TextEditor({
@@ -36,6 +39,8 @@ export function TextEditor({
   onNew,
   onSelect,
   onUnselect,
+  isRightSidebarCollapsed = false,
+  onExpandRightSidebar,
 }: TextEditorProps) {
   const [title, setTitle] = useState(initialDocument.title)
   const [content, setContent] = useState(initialDocument.content)
@@ -709,6 +714,18 @@ export function TextEditor({
             documentId={initialDocument.id}
             documentTitle={title}
           />
+          {/* Right sidebar expand button - only show when collapsed */}
+          {isRightSidebarCollapsed && onExpandRightSidebar && (
+            <Button
+              onClick={onExpandRightSidebar}
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 hover:bg-gray-200"
+              title="Show writing tools and analysis"
+            >
+              <PanelRight className="h-4 w-4 text-gray-500" />
+            </Button>
+          )}
         </div>
       </div>
 

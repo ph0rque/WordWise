@@ -413,6 +413,8 @@ export default function Page() {
                   onNew={handleNewDocument}
                   onSelect={setCurrentDocument}
                   onUnselect={handleUnselectDocument}
+                  isRightSidebarCollapsed={isRightSidebarCollapsed}
+                  onExpandRightSidebar={() => setIsRightSidebarCollapsed(false)}
                 />
               ) : (
                 // Show DocumentManager in main panel when no document is selected
@@ -428,7 +430,7 @@ export default function Page() {
                     <DocumentManager
                       onSelectDocument={handleSelectDocument}
                       onNewDocument={setCurrentDocument}
-                      currentDocumentId={currentDocument ? currentDocument.id : undefined}
+                      currentDocumentId={currentDocument?.id}
                       refreshDocumentsFlag={refreshDocumentsFlag}
                       onDocumentsLoaded={setHasDocuments}
                     />
@@ -448,21 +450,6 @@ export default function Page() {
               </aside>
             )}
           </div>
-          
-          {/* Floating expand button when sidebar is collapsed */}
-          {isRightSidebarCollapsed && (
-            <div className="fixed top-20 right-4 z-30 hidden md:block">
-              <Button
-                onClick={() => setIsRightSidebarCollapsed(false)}
-                size="sm"
-                variant="outline"
-                className="bg-white shadow-lg hover:shadow-xl transition-shadow"
-                title="Show writing tools and analysis"
-              >
-                <PanelRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
           
           {/* Mobile Sidebar */}
           {isSidebarOpen && <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
