@@ -1,4 +1,4 @@
-import type { Suggestion } from "./types"
+import type { Suggestion, SuggestionType } from "./types"
 
 // Common grammar mistakes patterns
 const grammarRules = [
@@ -130,6 +130,161 @@ const grammarRules = [
   },
 ]
 
+// Capitalization rules
+const capitalizationRules = [
+  {
+    // Check for sentences starting with lowercase letters
+    pattern: /([.!?]\s+)([a-z])/g,
+    check: (match: string, text: string, index: number) => {
+      const punctuation = match.match(/([.!?]\s+)/)?.[1] || ""
+      const lowercaseLetter = match.match(/([a-z])$/)?.[1] || ""
+      
+      return {
+        type: "grammar",
+        position: index + punctuation.length,
+        originalText: lowercaseLetter,
+        suggestedText: lowercaseLetter.toUpperCase(),
+        explanation: "Sentences should start with a capital letter.",
+      }
+    },
+  },
+  {
+    // Check for text starting with lowercase (beginning of document)
+    pattern: /^([a-z])/,
+    check: (match: string, text: string, index: number) => {
+      return {
+        type: "grammar",
+        position: index,
+        originalText: match,
+        suggestedText: match.toUpperCase(),
+        explanation: "Text should start with a capital letter.",
+      }
+    },
+  },
+  {
+    // Check for proper nouns that should be capitalized (common ones)
+    pattern: /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|america|england|france|germany|japan|china|india|canada|australia|brazil|russia|italy|spain|mexico|africa|asia|europe|north america|south america|united states|new york|california|texas|florida|london|paris|tokyo|beijing|moscow|rome|madrid|english|spanish|french|german|chinese|japanese|russian|italian|portuguese|arabic|hindi|christmas|easter|thanksgiving|halloween|new year)\b/g,
+    check: (match: string, text: string, index: number) => {
+      // Check if it's already capitalized
+      if (match[0] === match[0].toUpperCase()) return null
+      
+      return {
+        type: "grammar",
+        position: index,
+        originalText: match,
+        suggestedText: match.charAt(0).toUpperCase() + match.slice(1),
+        explanation: `"${match}" should be capitalized as it's a proper noun.`,
+      }
+    },
+  },
+]
+
+// Punctuation rules
+const punctuationRules = [
+  {
+    // Missing periods at end of sentences
+    pattern: /[a-zA-Z]\s*$/,
+    check: (match: string, text: string, index: number) => {
+      // Only suggest if this looks like the end of a complete sentence
+      const words = text.trim().split(/\s+/)
+      if (words.length >= 5) { // Only suggest for longer content
+        return {
+          type: "grammar",
+          position: text.length - 1,
+          originalText: "",
+          suggestedText: ".",
+          explanation: "Consider ending your sentence with a period.",
+        }
+      }
+      return null
+    },
+  },
+  {
+    // Double spaces after periods
+    pattern: /\.\s{2,}/g,
+    check: (match: string, text: string, index: number) => {
+      return {
+        type: "style",
+        position: index + 1,
+        originalText: match.substring(1),
+        suggestedText: " ",
+        explanation: "Use only one space after a period.",
+      }
+    },
+  },
+  {
+    // Missing comma in lists (very basic check)
+    pattern: /\b(\w+)\s+(and|or)\s+(\w+)\s+(and|or)\s+(\w+)\b/g,
+    check: (match: string, text: string, index: number) => {
+      // Check if there are already commas
+      if (match.includes(',')) return null
+      
+      const parts = match.split(/\s+/)
+      if (parts.length === 5) { // word and/or word and/or word
+        const suggestion = `${parts[0]}, ${parts[1]} ${parts[2]}, ${parts[3]} ${parts[4]}`
+        return {
+          type: "style",
+          position: index,
+          originalText: match,
+          suggestedText: suggestion,
+          explanation: "Consider using commas in lists for clarity.",
+        }
+      }
+      return null
+    },
+  },
+  {
+    // Apostrophe errors in possessives (basic patterns)
+    pattern: /\b(\w+)s\s+([\w]+)\b/g,
+    check: (match: string, text: string, index: number) => {
+      // Very basic check for missing apostrophe in possessives
+      const parts = match.split(/\s+/)
+      const firstWord = parts[0]
+      const secondWord = parts[1]
+      
+      // Simple heuristic: if first word ends in 's' and second word could be possessed
+      if (firstWord.endsWith('s') && 
+          !firstWord.endsWith('ss') && 
+          secondWord.match(/^(house|car|book|phone|computer|job|friend|family|idea|plan|dream|goal|hope)$/)) {
+        return {
+          type: "grammar",
+          position: index + firstWord.length - 1,
+          originalText: "s",
+          suggestedText: "'s",
+          explanation: "Use an apostrophe to show possession.",
+        }
+      }
+      return null
+    },
+  },
+  {
+    // Missing comma before "but", "and", "or" in compound sentences (basic)
+    pattern: /\b([A-Z]\w+.*?)\s+(but|and|or)\s+([A-Z]\w+.*?)\b/g,
+    check: (match: string, text: string, index: number) => {
+      // Only suggest if this looks like two independent clauses
+      const parts = match.split(/\s+(but|and|or)\s+/)
+      if (parts.length === 3) {
+        const beforeConjunction = parts[0]
+        const conjunction = parts[1]
+        const afterConjunction = parts[2]
+        
+        // Simple check: if both parts have verbs, suggest comma
+        if (beforeConjunction.match(/\b(is|are|was|were|have|has|had|do|does|did|will|would|can|could|should|might|may)\b/) &&
+            afterConjunction.match(/\b(is|are|was|were|have|has|had|do|does|did|will|would|can|could|should|might|may)\b/)) {
+          return {
+            type: "style",
+            position: index + beforeConjunction.length,
+            originalText: ` ${conjunction}`,
+            suggestedText: `, ${conjunction}`,
+            explanation: "Use a comma before coordinating conjunctions in compound sentences.",
+          }
+        }
+      }
+      return null
+    },
+  },
+]
+
 // Common spelling mistakes
 const spellingRules = [
   {
@@ -163,10 +318,10 @@ const spellingRules = [
 const styleRules = [
   {
     pattern: /\b(very|really|extremely)\b\s+\w+/gi,
-    check: (match: string) => {
+    check: (match: RegExpExecArray) => {
       return {
-        type: "style",
-        position: match.index,
+        type: "style" as const,
+        position: match.index || 0,
         originalText: match[0],
         suggestedText: match[0].replace(/very|really|extremely/i, ""),
         explanation: "Consider using a stronger word instead of an intensifier.",
@@ -178,7 +333,7 @@ const styleRules = [
     replacements: {
       "in order to": "to",
       "due to the fact that": "because",
-    },
+    } as const,
     explanation: "Consider using a more concise alternative.",
   },
   {
@@ -200,7 +355,38 @@ export function checkGrammar(text: string): Suggestion[] {
     while ((match = rule.pattern.exec(text)) !== null) {
       const suggestion = rule.check(match[0], text, match.index)
       if (suggestion) {
-        suggestions.push(suggestion)
+        suggestions.push({
+          ...suggestion,
+          type: suggestion.type as SuggestionType
+        })
+      }
+    }
+  })
+
+  // Check capitalization rules
+  capitalizationRules.forEach((rule) => {
+    let match
+    while ((match = rule.pattern.exec(text)) !== null) {
+      const suggestion = rule.check(match[0], text, match.index)
+      if (suggestion) {
+        suggestions.push({
+          ...suggestion,
+          type: suggestion.type as SuggestionType
+        })
+      }
+    }
+  })
+
+  // Check punctuation rules
+  punctuationRules.forEach((rule) => {
+    let match
+    while ((match = rule.pattern.exec(text)) !== null) {
+      const suggestion = rule.check(match[0], text, match.index)
+      if (suggestion) {
+        suggestions.push({
+          ...suggestion,
+          type: suggestion.type as SuggestionType
+        })
       }
     }
   })
@@ -223,8 +409,9 @@ export function checkGrammar(text: string): Suggestion[] {
 
   // Check style
   styleRules.forEach((rule) => {
-    if (rule.pattern && rule.replacements) {
+    if ('replacements' in rule && rule.replacements) {
       Object.keys(rule.replacements).forEach((phrase) => {
+        const replacements = rule.replacements as Record<string, string>
         const regex = new RegExp(`\\b(${phrase})\\b`, "gi")
         let match
         while ((match = regex.exec(text)) !== null) {
@@ -232,11 +419,32 @@ export function checkGrammar(text: string): Suggestion[] {
             type: "style",
             position: match.index,
             originalText: match[0],
-            suggestedText: match[0].replace(phrase, rule.replacements[phrase]),
+            suggestedText: match[0].replace(phrase, replacements[phrase]),
             explanation: rule.explanation,
           })
         }
       })
+    } else if ('check' in rule && rule.check) {
+      let match
+      while ((match = rule.pattern.exec(text)) !== null) {
+        const suggestion = rule.check(match)
+        if (suggestion) {
+          suggestions.push(suggestion)
+        }
+      }
+    } else if ('replacement' in rule && rule.replacement) {
+      let match
+      while ((match = rule.pattern.exec(text)) !== null) {
+        const replacement = typeof rule.replacement === "function" ? rule.replacement(match[0]) : rule.replacement
+
+        suggestions.push({
+          type: "spelling",
+          position: match.index,
+          originalText: match[0],
+          suggestedText: replacement,
+          explanation: rule.explanation,
+        })
+      }
     }
   })
 
