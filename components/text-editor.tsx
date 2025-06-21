@@ -68,8 +68,8 @@ export function TextEditor({
     }
   }, [initialDocument.content, initialDocument.title])
 
-  // Grammar checking function
-  const debouncedGrammarCheck = useDebouncedCallback(async (text: string) => {
+  // Grammar checking function - Enhanced for better performance and user experience
+  const debouncedGrammarCheck = useDebouncedCallback(async (text: string, isIncremental = false, lastWordsOnly = false) => {
     // Don't check grammar if user is currently correcting an error
     if (isUserCorrecting) {
       return
@@ -83,30 +83,77 @@ export function TextEditor({
 
     setIsCheckingGrammar(true)
     try {
+      let textToCheck = text
+      let positionOffset = 0
+      
+      // If this is incremental checking, only check the last few words
+      if (isIncremental && lastWordsOnly && text.length > 50) {
+        const words = text.split(/\s+/)
+        const lastFewWords = words.slice(-15).join(' ') // Check last 15 words
+        positionOffset = text.length - lastFewWords.length
+        textToCheck = lastFewWords
+        console.log('🔍 Incremental check: analyzing last 15 words:', lastFewWords.substring(0, 50) + '...')
+      } else {
+        console.log('🔍 Full document check: analyzing entire text')
+      }
+      
       // Use ChatGPT for all grammar and spelling checking
-      const suggestions = await checkAcademicGrammarClient(text, {
+      const suggestions = await checkAcademicGrammarClient(textToCheck, {
         academicLevel: 'high-school',
       })
       
-      setSuggestions(suggestions)
-      updateHighlights(suggestions)
+      // Adjust positions if we're doing incremental checking
+      const adjustedSuggestions = isIncremental && lastWordsOnly && positionOffset > 0
+        ? suggestions.map(s => ({ ...s, position: s.position + positionOffset }))
+        : suggestions
+      
+      // For incremental checks, merge with existing suggestions
+      if (isIncremental && lastWordsOnly) {
+        setSuggestions(prevSuggestions => {
+          // Remove old suggestions in the checked range
+          const startPosition = positionOffset
+          const endPosition = text.length
+          const filteredPrevious = prevSuggestions.filter(s => 
+            s.position < startPosition || s.position > endPosition
+          )
+          
+          // Add new suggestions
+          return [...filteredPrevious, ...adjustedSuggestions]
+        })
+      } else {
+        setSuggestions(adjustedSuggestions)
+      }
+      
+      // Update highlights with appropriate suggestions
+      if (isIncremental && lastWordsOnly) {
+        // For incremental updates, we need to get the current full suggestions list
+        setSuggestions(currentSuggestions => {
+          updateHighlights(currentSuggestions)
+          return currentSuggestions
+        })
+      } else {
+        updateHighlights(adjustedSuggestions)
+      }
     } catch (error) {
       console.error('Grammar check failed:', error)
-      setSuggestions([])
-      updateHighlights([])
+      if (!isIncremental) {
+        setSuggestions([])
+        updateHighlights([])
+      }
     } finally {
       setIsCheckingGrammar(false)
     }
-  }, 50) // Reduced debounce since we're triggering less frequently
+  }, 50) // Reduced debounce since we're smarter about what we check
 
-  // Initial grammar check for existing content
+  // Initial grammar check for existing content - Enhanced
   useEffect(() => {
     if (editorRef.current && initialDocument.content) {
       const plainText = editorRef.current.textContent || ""
       if (plainText.length > 5) {
+        console.log('📄 Document loaded, performing full grammar check...')
         // Delay initial check to ensure editor is fully loaded
         setTimeout(() => {
-          debouncedGrammarCheck(plainText)
+          debouncedGrammarCheck(plainText, false, false) // Full document check
         }, 500)
       }
     }
@@ -221,24 +268,26 @@ export function TextEditor({
       '\t'      // Tab
     ]
     
-        if (wordCompletionKeys.includes(e.key)) {
+    if (wordCompletionKeys.includes(e.key)) {
       // Get the text content for grammar checking
       const plainText = editorRef.current.textContent || ""
       
-      // Trigger grammar check after a short delay to allow the character to be inserted
+      // Trigger incremental grammar check after a short delay to allow the character to be inserted
       setTimeout(() => {
-        debouncedGrammarCheck(plainText + e.key)
+        console.log('⌨️ Word completion detected, triggering incremental check...')
+        debouncedGrammarCheck(plainText + e.key, true, true) // Incremental check of last words only
       }, 10)
     }
-   }
+  }
 
   const handlePaste = (e: React.ClipboardEvent) => {
-    // Trigger grammar check after paste with a delay
+    // Enhanced paste handling - check full document since paste can be substantial
     setTimeout(() => {
       if (editorRef.current) {
         const plainText = editorRef.current.textContent || ""
         if (plainText.length > 5) {
-          debouncedGrammarCheck(plainText)
+          console.log('📋 Paste detected, performing full grammar check...')
+          debouncedGrammarCheck(plainText, false, false) // Full document check for paste
         }
       }
     }, 100)
@@ -352,12 +401,39 @@ export function TextEditor({
             }, 100)
           })
           
-          // Track when user starts correcting an error
-          span.addEventListener('click', () => {
-            setIsUserCorrecting(true)
-            // Reset after a delay to allow for corrections
-            setTimeout(() => setIsUserCorrecting(false), 3000)
-          })
+          // Enhanced: Immediately remove highlight when user starts editing this word
+          const handleEditingStart = (e: Event) => {
+            console.log('✏️ User started editing highlighted word, removing highlight...')
+            // Immediately remove this highlight
+            const parent = span.parentNode
+            if (parent) {
+              parent.replaceChild(document.createTextNode(span.textContent || ''), span)
+              parent.normalize()
+              
+              // Hide any open tooltip
+              hideTooltip()
+              
+              // Set correcting flag to prevent immediate re-checking
+              setIsUserCorrecting(true)
+              
+              // After user finishes editing, re-check according to normal rules
+              setTimeout(() => {
+                setIsUserCorrecting(false)
+                // Trigger a re-check of the area around where they were editing
+                if (editorRef.current) {
+                  const plainText = editorRef.current.textContent || ""
+                  console.log('🔄 Re-checking after user edit...')
+                  debouncedGrammarCheck(plainText, true, true) // Incremental check
+                }
+              }, 2000) // Give user time to finish their edit
+            }
+          }
+          
+          // Add multiple event listeners to catch editing start
+          span.addEventListener('click', handleEditingStart)
+          span.addEventListener('keydown', handleEditingStart)
+          span.addEventListener('input', handleEditingStart)
+          span.addEventListener('focus', handleEditingStart)
           
           const parent = textNode.parentNode!
           
@@ -415,8 +491,6 @@ export function TextEditor({
       }
     }, 0)
   }
-
-
 
   const handleErrorHover = (event: Event, suggestion: Suggestion) => {
     showTooltip(event.target as HTMLElement, suggestion)
@@ -603,8 +677,6 @@ export function TextEditor({
     }
   }, [])
 
-
-
   return (
     <div className="flex h-full flex-col relative bg-white min-h-0">
       {/* Header */}
@@ -640,7 +712,7 @@ export function TextEditor({
         </div>
       </div>
 
-            {/* Automatic Keystroke Recording - Only for Students, Invisible */}
+      {/* Automatic Keystroke Recording - Only for Students, Invisible */}
       {isStudent && (
         <AutomaticRecorder
           ref={recorderRef}
@@ -673,8 +745,6 @@ export function TextEditor({
           </div>
         </div>
       </div>
-
-
 
       <DocumentSwitcherDialog
         open={isSwitching}

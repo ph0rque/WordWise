@@ -92,16 +92,16 @@ export async function checkAcademicGrammar(
         You are an expert spelling and grammar checker specializing in ${academicLevel} level writing.
         ${subjectContext}${levelContext}
         
-        Analyze the following text with priority focus on the LAST 10 WORDS, then check the entire text for:
+        Analyze the following text with PRIORITY FOCUS on the MOST RECENT CONTENT (typically the last 10-15 words), then check the entire text for:
         
-        1. SPELLING ERRORS:
+        1. SPELLING ERRORS (highest priority):
            - Misspelled words
            - Incorrect word forms
            - Typos and character transpositions
            - Homophones used incorrectly (their/there/they're, your/you're, etc.)
            - Common spelling mistakes
         
-        2. GRAMMAR ERRORS:
+        2. GRAMMAR ERRORS (high priority):
            - Subject-verb agreement errors
            - Verb tense inconsistencies and incorrect forms
            - Pronoun-antecedent agreement
@@ -116,17 +116,21 @@ export async function checkAcademicGrammar(
            - Double negatives
         
         For each error found:
-        - Provide exact character position where error starts
+        - Provide exact character position where error starts (0-based index)
         - Give the correct spelling or grammar form
         - Briefly explain the error type
         - Rate confidence (0-100%) in your correction
         
-        PRIORITIZE: Focus heavily on the last 10 words of the text, as this is where the user is currently typing.
+        SPECIAL INSTRUCTIONS FOR INCREMENTAL CHECKING:
+        - If this appears to be a fragment (last few words), focus heavily on spelling and basic grammar
+        - For recently typed content, prioritize immediate errors over style suggestions
+        - Be especially careful with character positions - they must be precise
+        - Focus on errors that are clear and unambiguous
         
         Text to analyze:
         "${text}"
         
-        Return only spelling and grammar errors, ordered by position (last 10 words first).
+        Return only clear spelling and grammar errors, ordered by confidence and severity.
       `,
     })
 
