@@ -122,12 +122,6 @@ export function ChatPanel({
     setError(null)
 
     try {
-      console.log('🚀 Sending message to AI tutor:', {
-        hasDocumentId: !!documentId,
-        hasDocumentContent: !!documentContent,
-        messageLength: inputMessage.trim().length
-      })
-
       const response = await fetch('/api/ai/essay-tutor-chat', {
         method: 'POST',
         headers: {
@@ -144,12 +138,10 @@ export function ChatPanel({
         }),
       })
 
-      console.log('📡 API response status:', response.status, response.statusText)
-
       // Check if response is ok
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('❌ API error response:', errorText)
+        console.error('API error response:', errorText)
         throw new Error(`Server error (${response.status}): ${response.statusText}`)
       }
 
@@ -157,15 +149,13 @@ export function ChatPanel({
       let data
       try {
         data = await response.json()
-        console.log('✅ API response parsed successfully')
       } catch (parseError) {
-        console.error('❌ Error parsing API response:', parseError)
+        console.error('Error parsing API response:', parseError)
         throw new Error('Invalid response from server. Please try again.')
       }
 
       // Check if the response indicates an error (even with 200 status)
       if (data.error) {
-        console.log('⚠️ API returned error flag:', data.error)
         setError(data.content || 'The AI tutor encountered an issue. Please try again.')
       }
       
@@ -182,10 +172,9 @@ export function ChatPanel({
       }
 
       setMessages(prev => [...prev, assistantMessage])
-      console.log('✅ Message exchange completed successfully')
 
     } catch (error) {
-      console.error('❌ Error in sendMessage:', error)
+      console.error('Error in sendMessage:', error)
       
       // Determine the type of error and provide appropriate feedback
       let errorMessage = 'Sorry, I had trouble responding. Please try again.'

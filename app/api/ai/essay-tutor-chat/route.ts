@@ -72,20 +72,13 @@ const WRITING_CONCEPTS = [
 ]
 
 export async function POST(request: NextRequest) {
-  console.log('🤖 AI Tutor Chat API called')
-
   try {
     // Parse request body with error handling
     let body
     try {
       body = await request.json()
-      console.log('📥 Request body parsed:', { 
-        hasMessage: !!body.message, 
-        hasDocumentId: !!body.documentId,
-        messageLength: body.message?.length || 0
-      })
     } catch (parseError) {
-      console.error('❌ Error parsing request body:', parseError)
+      console.error('Error parsing request body:', parseError)
       return NextResponse.json(
         { error: 'Invalid request body. Please check your data and try again.' },
         { status: 400 }
@@ -104,7 +97,6 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields with detailed logging
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      console.log('❌ Invalid message:', { message })
       return NextResponse.json(
         { error: 'Please enter a message to continue the conversation.' },
         { status: 400 }
@@ -112,7 +104,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (!documentId) {
-      console.log('❌ Missing documentId')
       return NextResponse.json(
         { error: 'Document ID is required. Please make sure you have a document open.' },
         { status: 400 }
@@ -121,7 +112,7 @@ export async function POST(request: NextRequest) {
 
     // Check environment variables
     if (!process.env.OPENAI_API_KEY) {
-      console.error('❌ Missing OpenAI API key')
+      console.error('Missing OpenAI API key')
       return NextResponse.json(
         { error: 'AI tutoring service is temporarily unavailable. Please try again later.' },
         { status: 503 }
@@ -129,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error('❌ Missing Supabase credentials')
+      console.error('Missing Supabase credentials')
       return NextResponse.json(
         { error: 'Database connection is not available. Please try again later.' },
         { status: 503 }
@@ -140,15 +131,12 @@ export async function POST(request: NextRequest) {
     let supabase
     let user
     try {
-      console.log('🔐 Creating Supabase client...')
       supabase = await createClient()
-      console.log('✅ Supabase client created')
       
-      console.log('👤 Getting user authentication...')
       const { data: userData, error: authError } = await supabase.auth.getUser()
       
       if (authError) {
-        console.error('❌ Authentication error:', authError)
+        console.error('Authentication error:', authError)
         return NextResponse.json(
           { error: 'Please sign in to use the AI tutor.' },
           { status: 401 }
@@ -156,7 +144,6 @@ export async function POST(request: NextRequest) {
       }
 
       if (!userData.user) {
-        console.log('❌ No user found in session')
         return NextResponse.json(
           { error: 'Please sign in to use the AI tutor.' },
           { status: 401 }
@@ -164,10 +151,9 @@ export async function POST(request: NextRequest) {
       }
 
       user = userData.user
-      console.log('✅ User authenticated:', user.id)
 
     } catch (authSetupError) {
-      console.error('❌ Error setting up authentication:', authSetupError)
+      console.error('Error setting up authentication:', authSetupError)
       return NextResponse.json(
         { error: 'Authentication setup failed. Please refresh the page and try again.' },
         { status: 500 }
@@ -178,19 +164,16 @@ export async function POST(request: NextRequest) {
     let sessionManager
     let chatSession
     try {
-      console.log('💬 Initializing chat session manager...')
       sessionManager = new ChatSessionManager(supabase)
       
-      console.log('📝 Getting or creating chat session...')
       chatSession = await sessionManager.getOrCreateSession(
         user.id,
         documentId,
         documentTitle ? `Chat: ${documentTitle}` : 'AI Tutor Chat'
       )
-      console.log('✅ Chat session ready:', chatSession.id)
 
     } catch (sessionError) {
-      console.error('❌ Error with chat session:', sessionError)
+      console.error('Error with chat session:', sessionError)
       return NextResponse.json(
         { error: 'Unable to create chat session. Please try again.' },
         { status: 500 }
@@ -217,8 +200,6 @@ export async function POST(request: NextRequest) {
     )
 
     if (isContentWritingRequest) {
-      console.log('🚫 Content writing request detected, sending educational response')
-      
       // Save user message
       try {
         await sessionManager.addMessage(
@@ -228,7 +209,7 @@ export async function POST(request: NextRequest) {
           { status: 'delivered' }
         )
       } catch (saveError) {
-        console.error('⚠️ Warning: Could not save user message:', saveError)
+        console.error('Warning: Could not save user message:', saveError)
       }
 
       const educationalResponse = {
@@ -259,7 +240,7 @@ export async function POST(request: NextRequest) {
           }
         )
       } catch (saveError) {
-        console.error('⚠️ Warning: Could not save AI response:', saveError)
+        console.error('Warning: Could not save AI response:', saveError)
       }
 
       return NextResponse.json(educationalResponse)
@@ -267,23 +248,20 @@ export async function POST(request: NextRequest) {
 
     // Save user message to database
     try {
-      console.log('💾 Saving user message...')
       await sessionManager.addMessage(
         chatSession.id,
         'user',
         message,
         { status: 'delivered' }
       )
-      console.log('✅ User message saved')
     } catch (error) {
-      console.error('⚠️ Warning: Could not save user message:', error)
+      console.error('Warning: Could not save user message:', error)
       // Continue processing even if message saving fails
     }
 
     // Get recent conversation history from database
     let conversationHistory: any[] = []
     try {
-      console.log('📚 Fetching conversation history...')
       const recentMessages = await sessionManager.getSessionMessages(chatSession.id, 16)
       conversationHistory = recentMessages
         .slice(-8) // Use last 8 messages for context
@@ -291,15 +269,13 @@ export async function POST(request: NextRequest) {
           role: msg.messageType === 'user' ? 'user' : 'assistant',
           content: msg.content
         }))
-      console.log('✅ Conversation history loaded:', conversationHistory.length, 'messages')
     } catch (error) {
-      console.error('⚠️ Warning: Could not fetch conversation history:', error)
+      console.error('Warning: Could not fetch conversation history:', error)
       // Fall back to provided messageHistory if database fetch fails
       conversationHistory = messageHistory.slice(-8).map((msg: ChatMessage) => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
         content: msg.content
       }))
-      console.log('📋 Using fallback message history:', conversationHistory.length, 'messages')
     }
 
     // Add document context if available
@@ -314,8 +290,6 @@ export async function POST(request: NextRequest) {
         : documentContent
       
       contextPrompt = `\n\nSTUDENT'S CURRENT DOCUMENT: "${documentTitle}" (${wordCount} words, ${charCount} characters)\n\nCURRENT CONTENT:\n"${contentPreview}"\n\nYou can reference this specific content to provide targeted guidance about structure, clarity, writing techniques, or specific improvements. Help the student improve what they've written, but do not write content for them.`
-      
-      console.log('📄 Document context added:', { wordCount, charCount, previewLength: contentPreview.length })
     }
 
     // Prepare the prompt
@@ -324,7 +298,6 @@ export async function POST(request: NextRequest) {
     // Call OpenAI API with comprehensive error handling
     let completion
     try {
-      console.log('🤖 Calling OpenAI API...')
       completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
@@ -337,10 +310,9 @@ export async function POST(request: NextRequest) {
         presence_penalty: 0.1,
         frequency_penalty: 0.1,
       })
-      console.log('✅ OpenAI API response received')
       
     } catch (openaiError) {
-      console.error('❌ OpenAI API error:', openaiError)
+      console.error('OpenAI API error:', openaiError)
       
       // Return helpful fallback response
       const fallbackResponse = {
@@ -371,7 +343,7 @@ export async function POST(request: NextRequest) {
           }
         )
       } catch (saveError) {
-        console.error('⚠️ Warning: Could not save fallback response:', saveError)
+        console.error('Warning: Could not save fallback response:', saveError)
       }
 
       return NextResponse.json(fallbackResponse, { status: 200 }) // Return 200 to prevent "Failed to fetch"
@@ -408,7 +380,6 @@ export async function POST(request: NextRequest) {
 
     // Save AI response to database
     try {
-      console.log('💾 Saving AI response...')
       await sessionManager.addMessage(
         chatSession.id,
         'assistant',
@@ -420,17 +391,15 @@ export async function POST(request: NextRequest) {
           status: 'delivered'
         }
       )
-      console.log('✅ AI response saved')
     } catch (error) {
-      console.error('⚠️ Warning: Could not save AI response:', error)
+      console.error('Warning: Could not save AI response:', error)
       // Continue and return response even if saving fails
     }
 
-    console.log('✅ AI Tutor response completed successfully')
     return NextResponse.json(finalResponse)
 
   } catch (error) {
-    console.error('❌ Unexpected error in AI tutor chat:', error)
+    console.error('Unexpected error in AI tutor chat:', error)
     
     // Return helpful error message that won't cause "Failed to fetch"
     const errorResponse = {
