@@ -228,22 +228,16 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
   // Don't show stats if there are less than 100 words
   if (currentAnalysis.wordCount < 100) {
     return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Readability Dashboard</CardTitle>
-          <CardDescription className="text-sm">Analyze and improve your writing clarity</CardDescription>
-        </CardHeader>
-        <CardContent className="text-center py-8">
-          <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-2">Keep writing!</p>
-          <p className="text-sm text-gray-500">
-            Analysis will appear when you have at least 100 words.
-          </p>
-          <p className="text-xs text-gray-400 mt-2">
-            Current: {currentAnalysis.wordCount} words
-          </p>
-        </CardContent>
-      </Card>
+      <div className="text-center py-8">
+        <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-600 mb-2">Keep writing!</p>
+        <p className="text-sm text-gray-500">
+          Analysis will appear when you have at least 100 words.
+        </p>
+        <p className="text-xs text-gray-400 mt-2">
+          Current: {currentAnalysis.wordCount} words
+        </p>
+      </div>
     )
   }
 
