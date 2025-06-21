@@ -42,14 +42,14 @@ export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebar
 
   return (
     <div className="border-l bg-gray-50/50 h-full flex flex-col min-h-0">
-      <div className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0">
+      <div className="flex items-center justify-between p-4 border-b bg-gray-50/50 flex-shrink-0">
         <h2 className="text-sm font-medium text-gray-700">Writing Tools</h2>
         {onCollapse && (
           <Button
             onClick={onCollapse}
             size="sm"
             variant="ghost"
-            className="h-7 w-7 p-0"
+            className="h-8 w-8 p-0 hover:bg-gray-200"
             title="Hide writing tools for focused writing"
           >
             <PanelLeftClose className="h-4 w-4" />
@@ -58,12 +58,12 @@ export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebar
       </div>
       <Tabs defaultValue="analysis" className="flex-1 flex flex-col min-h-0">
         <TabsList className="grid w-full grid-cols-2 flex-shrink-0 m-2">
-          <TabsTrigger value="analysis" className="text-xs">
-            <SlidersHorizontal className="mr-1 h-4 w-4" />
+          <TabsTrigger value="analysis" className="text-xs px-2">
+            <SlidersHorizontal className="mr-1 h-3 w-3" />
             Analysis
           </TabsTrigger>
-          <TabsTrigger value="ai-tutor" className="text-xs">
-            <Bot className="mr-1 h-4 w-4" />
+          <TabsTrigger value="ai-tutor" className="text-xs px-2">
+            <Bot className="mr-1 h-3 w-3" />
             AI Tutor
           </TabsTrigger>
         </TabsList>
