@@ -160,7 +160,25 @@ function calculateTextStatistics(text: string): {
     .filter(sentence => sentence.trim().length > 0)
     .filter(sentence => sentence.trim().match(/\w/)) // Must contain at least one word character
   
-  const paragraphs = text.split(/\n\s*\n/).filter(para => para.trim().length > 0)
+  // Improved paragraph counting - handle various paragraph separators
+  // Split by double newlines, single newlines with content, or multiple line breaks
+  const paragraphs = text
+    .split(/\n\s*\n|\r\n\s*\r\n/)  // Split by double line breaks (most common)
+    .filter(para => para.trim().length > 0)
+    .map(para => para.trim())
+  
+  // If no double newlines found, try splitting by single newlines with substantial content
+  let finalParagraphs = paragraphs
+  if (paragraphs.length === 1) {
+    const singleLineSplit = text
+      .split(/\n+/)
+      .filter(line => line.trim().length > 20) // Only count lines with substantial content as paragraphs
+      .map(line => line.trim())
+    
+    if (singleLineSplit.length > 1) {
+      finalParagraphs = singleLineSplit
+    }
+  }
   
   // Calculate syllables
   const syllableCount = words.reduce((total, word) => {
@@ -173,7 +191,7 @@ function calculateTextStatistics(text: string): {
     sentenceCount: Math.max(1, sentences.length),
     syllableCount,
     characterCount: cleanText.length,
-    paragraphCount: Math.max(1, paragraphs.length),
+    paragraphCount: Math.max(1, finalParagraphs.length),
     words: words.map(word => word.replace(/[^\w]/g, '').toLowerCase()).filter(w => w.length > 0)
   }
 }

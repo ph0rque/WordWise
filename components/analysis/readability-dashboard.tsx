@@ -225,6 +225,28 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
     )
   }
 
+  // Don't show stats if there are less than 100 words
+  if (currentAnalysis.wordCount < 100) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Readability Dashboard</CardTitle>
+          <CardDescription className="text-sm">Analyze and improve your writing clarity</CardDescription>
+        </CardHeader>
+        <CardContent className="text-center py-8">
+          <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600 mb-2">Keep writing!</p>
+          <p className="text-sm text-gray-500">
+            Analysis will appear when you have at least 100 words.
+          </p>
+          <p className="text-xs text-gray-400 mt-2">
+            Current: {currentAnalysis.wordCount} words
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -318,9 +340,9 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
               </div>
               <ul className="space-y-1">
                 {currentAnalysis.strengths.slice(0, 2).map((strength, index) => (
-                  <li key={index} className="text-xs text-muted-foreground flex items-start gap-1">
-                    <span className="text-green-500 mt-1">•</span>
-                    {strength}
+                  <li key={index} className="text-xs text-muted-foreground flex items-center gap-2">
+                    <span className="text-green-500 text-sm">•</span>
+                    <span className="flex-1">{strength}</span>
                   </li>
                 ))}
               </ul>
@@ -334,9 +356,9 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
               </div>
               <ul className="space-y-1">
                 {currentAnalysis.improvements.slice(0, 2).map((improvement, index) => (
-                  <li key={index} className="text-xs text-muted-foreground flex items-start gap-1">
-                    <span className="text-orange-500 mt-1">•</span>
-                    {improvement}
+                  <li key={index} className="text-xs text-muted-foreground flex items-center gap-2">
+                    <span className="text-orange-500 text-sm">•</span>
+                    <span className="flex-1">{improvement}</span>
                   </li>
                 ))}
               </ul>
