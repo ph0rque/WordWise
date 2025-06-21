@@ -57,7 +57,7 @@ export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebar
         )}
       </div>
       <Tabs defaultValue="analysis" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-full grid-cols-2 flex-shrink-0 m-2 max-w-full">
+        <TabsList className="grid w-auto grid-cols-2 flex-shrink-0 m-2">
           <TabsTrigger value="analysis" className="text-xs px-2">
             <SlidersHorizontal className="mr-1 h-3 w-3" />
             Analysis
