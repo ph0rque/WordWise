@@ -366,13 +366,15 @@ export default function Page() {
   return (
     <div className="flex h-screen w-full bg-white">
       <main className="flex flex-col flex-1">
-        <header className="flex h-16 items-center border-b bg-gray-50 px-6">
-          <RoleBasedHeader 
-            user={user}
-            onSignOut={handleSignOut}
-            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          />
-        </header>
+        {!isRightSidebarCollapsed && (
+          <header className="flex h-16 items-center border-b bg-gray-50 px-6">
+            <RoleBasedHeader 
+              user={user}
+              onSignOut={handleSignOut}
+              onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            />
+          </header>
+        )}
         <div className="flex flex-1 min-h-0">
           <div className={cn(
             "container mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 min-h-0 flex-1",
