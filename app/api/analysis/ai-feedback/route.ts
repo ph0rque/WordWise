@@ -32,19 +32,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Use OpenAI for intelligent analysis
-    const analysis = await generateAIFeedback(text, targetLevel, analysisType)
-    
-    return NextResponse.json({
-      success: true,
-      analysis,
-      metadata: {
-        textLength: text.length,
-        targetLevel,
-        analysisType,
-        timestamp: new Date().toISOString(),
-        aiGenerated: true
-      }
-    })
+    try {
+      const analysis = await generateAIFeedback(text, targetLevel, analysisType)
+      
+      return NextResponse.json({
+        success: true,
+        analysis,
+        metadata: {
+          textLength: text.length,
+          targetLevel,
+          analysisType,
+          timestamp: new Date().toISOString(),
+          aiGenerated: true
+        }
+      })
+    } catch (error) {
+      console.log('AI generation failed, falling back to basic analysis:', error)
+      return getFallbackAnalysis(text, targetLevel)
+    }
 
   } catch (error) {
     console.error('Error in AI feedback analysis:', error)
@@ -74,7 +79,7 @@ async function generateAIFeedback(
     readingLevel: z.enum(['elementary', 'middle-school', 'high-school', 'college', 'graduate']),
     difficulty: z.enum(['Very Easy', 'Easy', 'Moderate', 'Difficult', 'Very Difficult']),
     
-    strengths: z.array(z.string()).max(5),
+    strengths: z.array(z.string()).min(1).max(5),
     areasForImprovement: z.array(z.string()).min(3).max(5),
     specificRecommendations: z.array(z.string()).min(3).max(5),
     
@@ -86,70 +91,82 @@ async function generateAIFeedback(
       academicVocabularyPercentage: z.number().min(0).max(100)
     }),
     
-    priorityFocus: z.array(z.string()).max(3)
+    priorityFocus: z.array(z.string()).min(1).max(3)
   })
 
   const levelDescription = targetLevel === 'high-school' 
     ? 'high school (9th-12th grade) academic writing'
     : 'college-level academic writing'
 
-  const { object } = await generateObject({
-    model: openai("gpt-4o-mini"),
-    schema: FeedbackSchema,
-    prompt: `
-      You are an expert writing instructor analyzing ${levelDescription}. Provide targeted, actionable feedback.
+  try {
+    const { object } = await generateObject({
+      model: openai("gpt-4o-mini"),
+      schema: FeedbackSchema,
+      prompt: `
+        You are an expert writing instructor analyzing ${levelDescription}. Provide targeted, actionable feedback.
 
-      CRITICAL ANALYSIS REQUIREMENTS:
-      
-      1. CONSISTENCY CHECK: Ensure all metrics align logically
-         - If grade level is "Adult/Graduate", vocabulary must be sophisticated
-         - If reading level is "high-school", don't say vocabulary is "elementary"
-         - Areas for improvement must match the actual analysis
-      
-      2. TARGETED FEEDBACK (3-5 specific points):
-         - Focus on the most impactful improvements
-         - Be specific, not generic (avoid "improve vocabulary" - say what specifically)
-         - Prioritize issues that will help the student most
-      
-      3. ACCURATE ASSESSMENT:
-         - Calculate actual grade level based on sentence complexity and vocabulary
-         - Match difficulty rating to actual text complexity
-         - Vocabulary assessment must reflect actual word choices
-      
-      4. ACTIONABLE RECOMMENDATIONS:
-         - Provide specific steps the student can take
-         - Focus on 2-3 priority areas rather than many surface issues
-         - Include concrete examples when possible
-      
-      Text to analyze:
-      "${text}"
-      
-      Analyze this text thoroughly and provide consistent, helpful feedback that will genuinely help a ${targetLevel} student improve their academic writing.
-      
-      Remember: Areas for improvement should be specific and actionable, not contradictory placeholder text.
-    `,
-  })
+        CRITICAL ANALYSIS REQUIREMENTS:
+        
+        1. CONSISTENCY CHECK: Ensure all metrics align logically
+           - If grade level is "Adult/Graduate", vocabulary must be sophisticated
+           - If reading level is "high-school", don't say vocabulary is "elementary"
+           - Areas for improvement must match the actual analysis
+        
+        2. REQUIRED FEEDBACK STRUCTURE:
+           - MUST provide exactly 3-5 areas for improvement (minimum 3, maximum 5)
+           - MUST provide exactly 3-5 specific recommendations (minimum 3, maximum 5)
+           - At least 1 strength (maximum 5)
+           - 1-3 priority focus areas
+        
+        3. TARGETED FEEDBACK (be specific):
+           - Focus on the most impactful improvements
+           - Be specific, not generic (avoid "improve vocabulary" - say what specifically)
+           - Prioritize issues that will help the student most
+        
+        4. ACCURATE ASSESSMENT:
+           - Calculate actual grade level based on sentence complexity and vocabulary
+           - Match difficulty rating to actual text complexity
+           - Vocabulary assessment must reflect actual word choices
+        
+        5. ACTIONABLE RECOMMENDATIONS:
+           - Provide specific steps the student can take
+           - Focus on 2-3 priority areas rather than many surface issues
+           - Include concrete examples when possible
+        
+        Text to analyze:
+        "${text}"
+        
+        IMPORTANT: You MUST provide at least 3 areas for improvement and at least 3 specific recommendations. If the writing is excellent, focus on advanced techniques for further improvement.
+        
+        Analyze this text thoroughly and provide consistent, helpful feedback that will genuinely help a ${targetLevel} student improve their academic writing.
+      `,
+    })
 
-  return {
-    overallScore: object.overallScore,
-    gradeLevel: object.gradeLevel,
-    readingLevel: object.readingLevel,
-    difficulty: object.difficulty,
-    
-    strengths: object.strengths,
-    areasForImprovement: object.areasForImprovement,
-    recommendations: object.specificRecommendations,
-    
-    metrics: {
-      wordCount: object.readabilityMetrics.wordCount,
-      sentenceCount: object.readabilityMetrics.sentenceCount,
-      averageWordsPerSentence: object.readabilityMetrics.averageWordsPerSentence,
-      vocabularyLevel: object.readabilityMetrics.vocabularyComplexity,
-      academicVocabularyPercentage: object.readabilityMetrics.academicVocabularyPercentage,
-      readingTimeMinutes: Math.ceil(object.readabilityMetrics.wordCount / 200) // Assume 200 WPM
-    },
-    
-    priorityFocus: object.priorityFocus
+    return {
+      overallScore: object.overallScore,
+      gradeLevel: object.gradeLevel,
+      readingLevel: object.readingLevel,
+      difficulty: object.difficulty,
+      
+      strengths: object.strengths,
+      areasForImprovement: object.areasForImprovement,
+      recommendations: object.specificRecommendations,
+      
+      metrics: {
+        wordCount: object.readabilityMetrics.wordCount,
+        sentenceCount: object.readabilityMetrics.sentenceCount,
+        averageWordsPerSentence: object.readabilityMetrics.averageWordsPerSentence,
+        vocabularyLevel: object.readabilityMetrics.vocabularyComplexity,
+        academicVocabularyPercentage: object.readabilityMetrics.academicVocabularyPercentage,
+        readingTimeMinutes: Math.ceil(object.readabilityMetrics.wordCount / 200) // Assume 200 WPM
+      },
+      
+      priorityFocus: object.priorityFocus
+    }
+  } catch (error) {
+    console.error('Error generating AI feedback, falling back to basic analysis:', error)
+    // If AI generation fails, fall back to basic analysis
+    throw new Error('AI_GENERATION_FAILED')
   }
 }
 
@@ -191,11 +208,29 @@ function getFallbackAnalysis(text: string, targetLevel: 'high-school' | 'college
   }
   
   // Ensure we have at least 3 items in each category
-  if (areasForImprovement.length < 3) {
-    areasForImprovement.push('Continue developing academic writing skills')
+  while (areasForImprovement.length < 3) {
+    const additionalImprovements = [
+      'Continue developing academic writing skills',
+      'Focus on clearer topic sentences and transitions',
+      'Strengthen evidence and supporting details'
+    ]
+    const needed = 3 - areasForImprovement.length
+    areasForImprovement.push(...additionalImprovements.slice(0, needed))
   }
-  if (recommendations.length < 3) {
-    recommendations.push('Practice writing with feedback to improve consistently')
+  
+  while (recommendations.length < 3) {
+    const additionalRecommendations = [
+      'Practice writing with feedback to improve consistently',
+      'Read examples of strong academic writing in your field',
+      'Use active voice and precise language throughout'
+    ]
+    const needed = 3 - recommendations.length
+    recommendations.push(...additionalRecommendations.slice(0, needed))
+  }
+  
+  // Ensure we have at least 1 strength
+  if (strengths.length === 0) {
+    strengths.push('Shows effort in academic writing')
   }
   
   return NextResponse.json({
