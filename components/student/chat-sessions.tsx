@@ -110,7 +110,12 @@ export function ChatSessions({ className = '', documentId, documentTitle }: Chat
       }
 
       const data = await response.json();
-      setSessionMessages(data.messages || []);
+      // Convert timestamp strings to Date objects for ChatMessageComponent
+      const messagesWithDates = (data.messages || []).map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp)
+      }));
+      setSessionMessages(messagesWithDates);
     } catch (error) {
       console.error('Error loading session messages:', error);
       setSessionMessages([]);
@@ -192,24 +197,24 @@ export function ChatSessions({ className = '', documentId, documentTitle }: Chat
               {sessions.map((session) => (
                 <Card key={session.id} className="border border-gray-200 hover:border-emerald-200 transition-colors">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-3 mb-2">
-                          <MessageCircle className="h-4 w-4 text-emerald-600" />
-                          <h3 className="font-medium text-lg">{session.title}</h3>
-                          <Badge variant="outline" className="text-xs">
+                          <MessageCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                          <h3 className="font-medium text-lg truncate">{session.title}</h3>
+                          <Badge variant="outline" className="text-xs flex-shrink-0">
                             {session.messageCount} messages
                           </Badge>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm text-gray-600 mb-3">
                           <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3" />
-                            <span>Started {formatDate(session.createdAt)}</span>
+                            <Calendar className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">Started {formatDate(session.createdAt)}</span>
                           </div>
                           <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3" />
-                            <span>Last active {formatDate(session.lastMessageAt)}</span>
+                            <Clock className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">Last active {formatDate(session.lastMessageAt)}</span>
                           </div>
                         </div>
 
@@ -220,7 +225,7 @@ export function ChatSessions({ className = '', documentId, documentTitle }: Chat
                               <p className="text-xs text-gray-500 mb-1">
                                 Last message from {session.lastMessage.type === 'user' ? 'you' : 'AI tutor'}:
                               </p>
-                              <p className="text-sm text-gray-700 truncate">
+                              <p className="text-sm text-gray-700 line-clamp-2 overflow-hidden">
                                 {session.lastMessage.content}
                               </p>
                             </div>
@@ -228,7 +233,7 @@ export function ChatSessions({ className = '', documentId, documentTitle }: Chat
                         )}
                       </div>
 
-                      <div className="flex items-center space-x-2 ml-4">
+                      <div className="flex items-center justify-end sm:justify-start sm:flex-shrink-0">
                         <Button
                           size="sm"
                           variant="outline"
@@ -236,8 +241,7 @@ export function ChatSessions({ className = '', documentId, documentTitle }: Chat
                           className="flex items-center space-x-1"
                         >
                           <Eye className="h-3 w-3" />
-                          <span>View Chat</span>
-                          <ChevronRight className="h-3 w-3" />
+                          <span>View</span>
                         </Button>
                       </div>
                     </div>
