@@ -110,11 +110,25 @@ export function ChatSessions({ className = '', documentId, documentTitle }: Chat
       }
 
       const data = await response.json();
-      // Convert timestamp strings to Date objects for ChatMessageComponent
-      const messagesWithDates = (data.messages || []).map((msg: any) => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp)
-      }));
+      // Convert timestamp strings to Date objects and ensure metadata arrays are properly formatted
+      const messagesWithDates = (data.messages || []).map((msg: any) => {
+        // Ensure metadata arrays are properly formatted
+        const metadata = msg.metadata ? {
+          ...msg.metadata,
+          relatedConcepts: Array.isArray(msg.metadata.relatedConcepts) 
+            ? msg.metadata.relatedConcepts 
+            : (msg.metadata.relatedConcepts ? [msg.metadata.relatedConcepts] : []),
+          suggestedQuestions: Array.isArray(msg.metadata.suggestedQuestions)
+            ? msg.metadata.suggestedQuestions
+            : (msg.metadata.suggestedQuestions ? [msg.metadata.suggestedQuestions] : [])
+        } : undefined;
+
+        return {
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+          metadata
+        };
+      });
       setSessionMessages(messagesWithDates);
     } catch (error) {
       console.error('Error loading session messages:', error);

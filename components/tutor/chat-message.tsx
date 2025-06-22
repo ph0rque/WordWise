@@ -263,7 +263,7 @@ export function ChatMessageComponent({
 
 
                 {/* Related concepts */}
-                {message.metadata.relatedConcepts && message.metadata.relatedConcepts.length > 0 && (
+                {message.metadata.relatedConcepts && Array.isArray(message.metadata.relatedConcepts) && message.metadata.relatedConcepts.length > 0 && (
                   <div className="space-y-1">
                     <span className="text-xs text-gray-500">Related concepts:</span>
                     <div className="flex flex-wrap gap-1">
