@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TrendingUp, TrendingDown, Target, BookOpen, AlertCircle, CheckCircle, Clock, Award, ChevronDown, ChevronUp } from 'lucide-react'
+import { getSupabaseClient } from '@/lib/supabase/client'
 
 export interface ReadabilityMetrics {
   fleschScore: number
@@ -75,6 +76,29 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
   const [showDetails, setShowDetails] = useState(false)
   const [calculatedAnalysis, setCalculatedAnalysis] = useState<ReadabilityAnalysis | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
+  const [userGrade, setUserGrade] = useState<number>(9) // Default to 9th grade
+
+  // Fetch user's grade level from settings
+  useEffect(() => {
+    const fetchUserGrade = async () => {
+      try {
+        const supabase = getSupabaseClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session?.user?.user_metadata?.grade) {
+          const grade = parseInt(session.user.user_metadata.grade, 10)
+          if (grade >= 9 && grade <= 12) {
+            setUserGrade(grade)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user grade:', error)
+        // Keep default of 9th grade
+      }
+    }
+
+    fetchUserGrade()
+  }, [])
 
   // Calculate analysis when text changes
   useEffect(() => {
@@ -90,6 +114,66 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
 
     setAnalyzing(true)
     try {
+      // Use the new AI-powered feedback API
+      const response = await fetch('/api/analysis/ai-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: textToAnalyze,
+          targetLevel: 'high-school',
+          analysisType: 'comprehensive'
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('AI Feedback result:', result)
+        
+        // Convert the AI feedback to our ReadabilityAnalysis format
+        const aiAnalysis = result.analysis
+        const convertedAnalysis: ReadabilityAnalysis = {
+          metrics: {
+            fleschScore: Math.max(0, Math.min(100, 206.835 - (1.015 * aiAnalysis.metrics.averageWordsPerSentence) - (84.6 * 1.5))), // Estimate Flesch
+            fleschKincaidGrade: aiAnalysis.gradeLevel,
+            colemanLiauIndex: aiAnalysis.gradeLevel + 1, // Estimate
+            automatedReadabilityIndex: aiAnalysis.gradeLevel - 1, // Estimate
+            gunningFogIndex: aiAnalysis.gradeLevel + 2, // Estimate
+            smogIndex: aiAnalysis.gradeLevel, // Estimate
+            averageWordsPerSentence: aiAnalysis.metrics.averageWordsPerSentence,
+            averageSyllablesPerWord: 1.5, // Estimate
+            complexWordsPercentage: Math.max(0, Math.min(50, aiAnalysis.metrics.academicVocabularyPercentage * 2)), // Estimate
+            passiveVoicePercentage: 10, // Estimate
+            sentenceVariety: 7, // Estimate
+            readingTimeMinutes: aiAnalysis.metrics.readingTimeMinutes
+          },
+          overallGrade: aiAnalysis.gradeLevel,
+          difficulty: aiAnalysis.difficulty,
+          targetAudience: getTargetAudience(aiAnalysis.gradeLevel),
+          strengths: aiAnalysis.strengths || [],
+          improvements: aiAnalysis.areasForImprovement || [],
+          recommendations: aiAnalysis.recommendations || [],
+          score: aiAnalysis.overallScore,
+          wordCount: aiAnalysis.metrics.wordCount,
+          sentenceCount: aiAnalysis.metrics.sentenceCount,
+          paragraphCount: Math.max(1, Math.floor(aiAnalysis.metrics.wordCount / 100)) // Estimate
+        }
+        setCalculatedAnalysis(convertedAnalysis)
+      } else {
+        console.error('Failed to get AI feedback, falling back to basic analysis')
+        // Fallback to the original readability API
+        await fallbackToBasicAnalysis(textToAnalyze)
+      }
+    } catch (error) {
+      console.error('Error getting AI feedback:', error)
+      // Fallback to basic analysis
+      await fallbackToBasicAnalysis(textToAnalyze)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const fallbackToBasicAnalysis = async (textToAnalyze: string) => {
+    try {
       const response = await fetch('/api/analysis/readability', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,7 +184,7 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
         })
       })
 
-             if (response.ok) {
+      if (response.ok) {
         const result = await response.json()
         // Convert the API response to our ReadabilityAnalysis format
         const convertedAnalysis: ReadabilityAnalysis = {
@@ -121,24 +205,19 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
           overallGrade: result.metrics.recommendedGradeLevel,
           difficulty: getDifficultyFromGrade(result.metrics.recommendedGradeLevel),
           targetAudience: getTargetAudience(result.metrics.recommendedGradeLevel),
-          strengths: result.strengths || [],
-          improvements: result.improvementAreas || [],
-          recommendations: result.recommendations || [],
+          strengths: result.strengths || ['Analysis completed'],
+          improvements: result.improvementAreas || ['Continue practicing'],
+          recommendations: result.recommendations || ['Keep writing regularly'],
           score: Math.round(Math.max(0, Math.min(100, result.metrics.fleschReadingEase))), // Cap score between 0-100
           wordCount: result.metrics.wordCount,
           sentenceCount: result.metrics.sentenceCount,
           paragraphCount: result.metrics.paragraphCount
         }
         setCalculatedAnalysis(convertedAnalysis)
-      } else {
-        console.error('Failed to analyze readability')
-        setCalculatedAnalysis(null)
       }
-    } catch (error) {
-      console.error('Error analyzing readability:', error)
+    } catch (fallbackError) {
+      console.error('Fallback analysis also failed:', fallbackError)
       setCalculatedAnalysis(null)
-    } finally {
-      setAnalyzing(false)
     }
   }
 
@@ -263,7 +342,7 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
             <div className="text-2xl font-bold">
               {currentAnalysis.overallGrade > 12 ? 'Adult' : Math.round(currentAnalysis.overallGrade).toString()}
             </div>
-            <div className="text-xs text-muted-foreground">Target: {targetGradeLevel}th grade</div>
+            <div className="text-xs text-muted-foreground">Target: {userGrade}th grade</div>
           </div>
         </div>
 

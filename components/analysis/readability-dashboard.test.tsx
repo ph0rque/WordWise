@@ -46,7 +46,7 @@ interface ReadabilityDashboardProps {
 const SimpleReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
   analysis,
   trends = [],
-  targetGradeLevel = 12,
+  targetGradeLevel = 9, // Updated to match the new default
   isLoading = false,
   onAnalyze,
   onRefresh
@@ -479,7 +479,7 @@ describe('ReadabilityDashboard Component Logic', () => {
     it('should use default target grade level when not provided', () => {
       render(<SimpleReadabilityDashboard />)
       
-      expect(screen.getByText('Target: 12th grade')).toBeInTheDocument()
+      expect(screen.getByText('Target: 9th grade')).toBeInTheDocument()
     })
   })
 
