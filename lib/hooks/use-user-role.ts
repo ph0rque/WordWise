@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getCurrentUserWithRoleFromSession } from '@/lib/auth/roles'
+import { getCurrentUserWithRoleFromSession, clearRoleCache } from '@/lib/auth/roles'
 import { getSupabaseClient, getCachedSupabaseSession } from '@/lib/supabase/client'
 import type { UserRole } from '@/lib/types'
 import { ROLE_PERMISSIONS } from '@/lib/types'
@@ -28,6 +28,10 @@ const RETRY_DELAY = 3000 // 3 seconds between retries
 const DEBOUNCE_DELAY = 1000 // 1 second debounce
 let refreshTimeout: NodeJS.Timeout | null = null
 
+// Add caching to prevent redundant calls
+let cachedRoleData: { user: any; timestamp: number } | null = null
+const CACHE_DURATION = 30000 // 30 seconds cache
+
 /**
  * Custom hook for managing user role state and providing role-based UI utilities
  */
@@ -38,7 +42,8 @@ export function useUserRole(): UseUserRoleState {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [mounted, setMounted] = useState(false)
   const retryCountRef = useRef(0)
-  const maxRetries = 3
+  const maxRetries = 2 // Reduced from 3
+  const isRefreshingRef = useRef(false) // Prevent concurrent refreshes
 
   // Debounced refresh function to prevent excessive calls
   const debouncedRefresh = () => {
@@ -47,60 +52,82 @@ export function useUserRole(): UseUserRoleState {
     }
     
     refreshTimeout = setTimeout(() => {
-      refreshUserRole()
+      if (!isRefreshingRef.current) {
+        refreshUserRole()
+      }
     }, DEBOUNCE_DELAY)
   }
 
-  const refreshUserRole = async () => {
-    // Check if refreshes should be suppressed (for quick app/tab switches)
-    if (typeof window !== 'undefined' && window.shouldSuppressRefresh?.()) {
-      console.log('🚫 useUserRole: Refresh suppressed due to quick app/tab switch')
+  const refreshUserRole = async (): Promise<void> => {
+    // Prevent concurrent refreshes
+    if (isRefreshingRef.current) {
+      console.log('🔄 useUserRole: Refresh already in progress, skipping...')
       return
     }
 
-    try {
-      console.log('🔄 useUserRole: Starting optimized role refresh...')
-      setLoading(true)
-      setError(null)
+    isRefreshingRef.current = true
+    console.log('🔄 useUserRole: Starting role refresh...')
+    setLoading(true)
+    setError(null)
 
-      // Get session + user + role with API fallback
-      console.log('🔍 useUserRole: Getting session and role data...')
-      
+    try {
       let result = null
-      
-      try {
-        // Try the direct approach first (with timeout)
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Direct query timed out')), 3000)
-        )
-        
-        const dataPromise = getCurrentUserWithRoleFromSession()
-        result = await Promise.race([dataPromise, timeoutPromise])
-      } catch (directError) {
-        console.log('🔄 useUserRole: Direct query failed, trying API fallback...')
-        
-        // Fallback to API route
+
+      // Check cache first
+      if (cachedRoleData && Date.now() - cachedRoleData.timestamp < CACHE_DURATION) {
+        console.log('✅ useUserRole: Using cached role data')
+        result = cachedRoleData.user
+      } else {
+        // Clear expired cache
+        cachedRoleData = null
+
+        // Try the optimized direct approach with shorter timeout
         try {
-          const response = await fetch('/api/user-role')
-          if (response.ok) {
-            const apiData = await response.json()
-            if (apiData.user && !apiData.error) {
-              // Convert API response to expected format
-              result = {
-                user: {
-                  id: apiData.user.id,
-                  email: apiData.user.email,
-                  role: apiData.user.role,
-                                     permissions: ROLE_PERMISSIONS[apiData.user.role as UserRole] || ROLE_PERMISSIONS.student,
-                  created_at: apiData.user.created_at,
-                  updated_at: apiData.user.updated_at,
-                },
-                session: { user: apiData.user } // Mock session for compatibility
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Query timed out')), 2000) // Reduced from 3000
+          )
+          
+          const dataPromise = getCurrentUserWithRoleFromSession()
+          result = await Promise.race([dataPromise, timeoutPromise])
+
+          // Cache successful result
+          if (result) {
+            cachedRoleData = { user: result, timestamp: Date.now() }
+          }
+        } catch (directError) {
+          console.log('🔄 useUserRole: Direct query failed, trying single API fallback...')
+          
+          // Single API fallback (removed multiple fallback chains)
+          try {
+            const response = await fetch('/api/user-role', {
+              cache: 'no-cache', // Prevent browser caching for role checks
+              headers: {
+                'Cache-Control': 'no-cache'
+              }
+            })
+            
+            if (response.ok) {
+              const apiData = await response.json()
+              if (apiData.user && !apiData.error) {
+                result = {
+                  user: {
+                    id: apiData.user.id,
+                    email: apiData.user.email,
+                    role: apiData.user.role,
+                    permissions: ROLE_PERMISSIONS[apiData.user.role as UserRole] || ROLE_PERMISSIONS.student,
+                    created_at: apiData.user.created_at,
+                    updated_at: apiData.user.updated_at,
+                  },
+                  session: { user: apiData.user }
+                }
+                
+                // Cache API result
+                cachedRoleData = { user: result, timestamp: Date.now() }
               }
             }
+          } catch (apiError) {
+            console.error('❌ useUserRole: API fallback failed:', apiError)
           }
-        } catch (apiError) {
-          console.error('❌ useUserRole: API fallback also failed:', apiError)
         }
       }
       
@@ -108,7 +135,7 @@ export function useUserRole(): UseUserRoleState {
         console.log('🚫 useUserRole: No session or role data, setting unauthenticated state')
         setRole(null)
         setIsAuthenticated(false)
-        retryCountRef.current = 0 // Reset retry count on successful operation
+        retryCountRef.current = 0
         return
       }
 
@@ -120,34 +147,34 @@ export function useUserRole(): UseUserRoleState {
 
       setIsAuthenticated(true)
       setRole(user.role)
-      retryCountRef.current = 0 // Reset retry count on success
+      retryCountRef.current = 0
       
     } catch (err) {
       console.error('❌ useUserRole: Error in refreshUserRole:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user role'
       
-      // Handle errors with retry logic
+      // Simplified retry logic
       retryCountRef.current += 1
       
       if (retryCountRef.current <= maxRetries) {
-        console.log(`⏳ useUserRole: Error occurred, retrying in ${RETRY_DELAY}ms (attempt ${retryCountRef.current}/${maxRetries})`)
+        console.log(`⏳ useUserRole: Retrying in ${RETRY_DELAY}ms (attempt ${retryCountRef.current}/${maxRetries})`)
         
-        // Set a temporary loading state and retry after delay
         setTimeout(() => {
-          if (mounted) {
+          if (mounted && !isRefreshingRef.current) {
             refreshUserRole()
           }
         }, RETRY_DELAY)
         return
       } else {
-        console.error('❌ useUserRole: Max retries exceeded, falling back to unauthenticated state')
-        setError(`Failed to authenticate after ${maxRetries} attempts. Please refresh the page.`)
+        console.error('❌ useUserRole: Max retries exceeded')
+        setError(`Authentication failed. Please refresh the page.`)
         setRole(null)
         setIsAuthenticated(false)
       }
     } finally {
       console.log('✅ useUserRole: Role refresh complete')
       setLoading(false)
+      isRefreshingRef.current = false
     }
   }
 
@@ -165,15 +192,24 @@ export function useUserRole(): UseUserRoleState {
       console.log('🔄 useUserRole: Auth state changed:', event)
       
       if (event === 'SIGNED_IN') {
-        // Reset retry count on successful auth events
+        // Clear cache on sign in to ensure fresh data
+        clearRoleCache()
+        cachedRoleData = null
         retryCountRef.current = 0
         await refreshUserRole()
       } else if (event === 'TOKEN_REFRESHED') {
-        // Use debounced refresh for token refreshes to prevent excessive calls
-        console.log('🔄 useUserRole: Token refreshed, using debounced refresh')
-        retryCountRef.current = 0
-        debouncedRefresh()
+        // For token refresh, only update if we don't have recent cached data
+        console.log('🔄 useUserRole: Token refreshed')
+        if (!cachedRoleData || Date.now() - cachedRoleData.timestamp > CACHE_DURATION / 2) {
+          retryCountRef.current = 0
+          debouncedRefresh()
+        } else {
+          console.log('🔄 useUserRole: Skipping refresh due to recent cache')
+        }
       } else if (event === 'SIGNED_OUT') {
+        // Clear cache on sign out
+        clearRoleCache()
+        cachedRoleData = null
         setRole(null)
         setIsAuthenticated(false)
         setError(null)
@@ -187,6 +223,10 @@ export function useUserRole(): UseUserRoleState {
       clearTimeout(initTimeout)
       subscription.unsubscribe()
       setMounted(false)
+      // Clear any pending refresh timeouts
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout)
+      }
     }
   }, [])
 

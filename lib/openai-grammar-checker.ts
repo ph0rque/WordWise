@@ -60,40 +60,93 @@ export async function checkGrammarWithAI(text: string): Promise<Suggestion[]> {
       model: openai("gpt-4o-mini"),
       schema: SuggestionSchema,
       prompt: `
-        Analyze the following text for grammar, spelling, style, clarity, and tone issues. 
-        Provide specific suggestions with exact positions in the text.
+        You are a conservative and accurate grammar and spelling checker. Your goal is to identify ONLY clear, unambiguous errors. 
         
-        For each issue found:
-        1. Identify the exact position (character index) where the issue starts
-        2. Specify the original problematic text
-        3. Provide a corrected version
-        4. Explain why the change is needed
-        5. Rate the severity (low, medium, high)
+        CRITICAL: Only flag issues you are absolutely certain about (95%+ confidence). When in doubt, DO NOT flag.
         
-        Focus on:
-        - Grammar errors (subject-verb agreement, tense consistency, etc.)
-        - Spelling mistakes
-        - Style improvements (wordiness, passive voice, etc.)
-        - Clarity issues (unclear sentences, ambiguous pronouns)
-        - Tone consistency
+        WHAT TO FLAG (only if 100% certain):
+        1. SPELLING ERRORS:
+           - Completely misspelled words (e.g., "recieve" → "receive")
+           - Clear typos with obvious corrections (e.g., "teh" → "the")
+           - Wrong homophones in clear context (e.g., "their going" → "they're going")
+        
+        2. GRAMMAR ERRORS:
+           - Clear subject-verb disagreement (e.g., "He are going" → "He is going")
+           - Obvious tense errors (e.g., "Yesterday I go" → "Yesterday I went")
+           - Missing articles when absolutely required (e.g., "I saw dog" → "I saw a dog")
+        
+        WHAT NOT TO FLAG:
+        - Correctly spelled words that might sound unusual
+        - Style preferences or optional improvements
+        - Words that are contextually appropriate
+        - Technical terms, proper nouns, or specialized vocabulary
+        - Minor stylistic variations
+        - Complex sentences that are grammatically correct
+        - Creative or informal expressions that aren't errors
+        - Contractions and informal language (unless explicitly incorrect)
+        
+        POSITION ACCURACY:
+        - Calculate exact character positions carefully
+        - Count from the beginning of the text (0-based index)
+        - Double-check your position calculations
+        
+        For each DEFINITE error:
+        1. Identify exact position (character index) where error starts
+        2. Specify the exact problematic text
+        3. Provide the correct version
+        4. Explain briefly why it's wrong
+        5. Rate severity appropriately
         
         Text to analyze:
         "${text}"
         
-        Return suggestions in order of appearance in the text.
+        Remember: It's better to miss a minor issue than to flag something that's actually correct.
+        Return only definite errors, ordered by confidence level.
       `,
     })
 
     console.log("OpenAI API call successful, processing suggestions")
 
-    return object.suggestions.map((suggestion) => ({
-      type: suggestion.type as any,
-      position: suggestion.position,
-      originalText: suggestion.originalText,
-      suggestedText: suggestion.suggestedText,
-      explanation: suggestion.explanation,
-      severity: suggestion.severity,
-    }))
+    return object.suggestions
+      .map((suggestion) => ({
+        type: suggestion.type as any,
+        position: suggestion.position,
+        originalText: suggestion.originalText,
+        suggestedText: suggestion.suggestedText,
+        explanation: suggestion.explanation,
+        severity: suggestion.severity,
+      }))
+      // Filter out likely false positives
+      .filter((suggestion) => {
+        const originalLower = suggestion.originalText.toLowerCase()
+        
+        // Don't flag common proper nouns or technical terms
+        const commonProperNouns = ['google', 'facebook', 'twitter', 'youtube', 'instagram', 
+                                  'microsoft', 'apple', 'amazon', 'netflix', 'zoom', 'covid', 
+                                  'iphone', 'android', 'wifi', 'bluetooth', 'javascript', 'python',
+                                  'github', 'linkedin', 'whatsapp', 'spotify', 'uber', 'airbnb']
+        
+        if (commonProperNouns.includes(originalLower)) {
+          return false
+        }
+        
+        // Don't flag single letters (often part of abbreviations or variables)
+        if (suggestion.originalText.length === 1) {
+          return false
+        }
+        
+        // Don't flag words that are likely abbreviations or acronyms
+        if (/^[A-Z]{2,}$/g.test(suggestion.originalText)) {
+          return false
+        }
+        
+        // Don't flag contractions unless they're clearly wrong
+        if (suggestion.originalText.includes("'") && suggestion.type !== 'grammar') {
+          return false
+        }
+        
+        return true
+      })
   } catch (error) {
     console.error("Error checking grammar with AI:", error)
     // Fallback to basic grammar checker

@@ -152,11 +152,6 @@ export default function Page() {
     setCurrentDocument(data || null)
   }
 
-  // Force reload function for stuck states
-  const handleForceReload = () => {
-    window.location.reload()
-  }
-
   // Set mounted state to avoid hydration issues
   useEffect(() => {
     setMounted(true)
@@ -291,29 +286,9 @@ export default function Page() {
                   {loadingError || roleError}
                 </AlertDescription>
               </Alert>
-              <Button 
-                onClick={handleForceReload}
-                variant="outline" 
-                className="mt-4"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh Page
-              </Button>
-            </div>
-          )}
-          
-          {/* Show manual refresh option after 5 seconds */}
-          {!loadingError && (
-            <div className="mt-8">
-              <p className="text-sm text-gray-500 mb-2">Taking longer than expected?</p>
-              <Button 
-                onClick={handleForceReload}
-                variant="ghost" 
-                size="sm"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh Page
-              </Button>
+              <p className="mt-4 text-sm text-gray-600">
+                Please try signing out and signing back in if the issue persists.
+              </p>
             </div>
           )}
         </div>
@@ -363,7 +338,7 @@ export default function Page() {
                 To get started, please select your role to access the appropriate features.
               </p>
               <Button 
-                onClick={() => window.location.href = '/auth/role-setup'}
+                onClick={() => router.push('/auth/role-setup')}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
                 Complete Profile Setup

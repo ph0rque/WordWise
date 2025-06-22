@@ -193,12 +193,44 @@ export function TextEditor({
         console.error("Error saving document:", error)
       } else if (data) {
         onSave(data)
+        
+        // Trigger AI analysis after successful save (only if there's content)
+        if (newContent.trim() && newContent.trim().length > 50) {
+          console.log('📊 Document saved, triggering AI analysis...')
+          try {
+            // Don't await this - let it run in background
+            triggerAIAnalysis(newContent)
+          } catch (analysisError) {
+            console.error('Error triggering AI analysis:', analysisError)
+            // Don't fail the save if analysis fails
+          }
+        }
       }
     } catch (error) {
       console.error("Error in debouncedSave:", error)
     }
     setIsSaving(false)
   }, 1500)
+
+  // Function to trigger AI analysis in the background
+  const triggerAIAnalysis = async (content: string) => {
+    try {
+      // This runs in the background and updates the analysis components
+      await fetch('/api/analysis/ai-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: content,
+          targetLevel: 'high-school',
+          analysisType: 'comprehensive'
+        })
+      })
+      console.log('✅ AI analysis triggered successfully (background)')
+    } catch (error) {
+      console.error('❌ Background AI analysis failed:', error)
+      // Fail silently - this shouldn't interrupt the user's writing
+    }
+  }
 
   // Manual save function that stops recording
   const handleManualSave = async () => {

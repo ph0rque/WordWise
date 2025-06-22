@@ -3,7 +3,9 @@ import { getSupabaseClient } from '@/lib/supabase/client'
 import type { UserRole, RolePermissions, UserWithRole, User } from '@/lib/types'
 import { ROLE_PERMISSIONS } from '@/lib/types'
 
-
+// Add module-level caching for roles to prevent redundant database calls
+let roleCache: Map<string, { role: UserRole; timestamp: number }> = new Map()
+const ROLE_CACHE_DURATION = 30000 // 30 seconds
 
 /**
  * Get the current user's role from the user_roles database table
@@ -23,6 +25,7 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
 /**
  * Get the current user with role information using session data
  * This bypasses RLS issues by using the database function directly
+ * Now includes caching to prevent redundant database calls
  * @returns Promise<{ user: UserWithRole, session: any } | null> - User with role and session or null
  */
 export async function getCurrentUserWithRoleFromSession(): Promise<{ user: UserWithRole, session: any } | null> {
@@ -45,6 +48,25 @@ export async function getCurrentUserWithRoleFromSession(): Promise<{ user: UserW
 
     const user = session.user
 
+    // Check cache first
+    const cached = roleCache.get(user.id)
+    if (cached && Date.now() - cached.timestamp < ROLE_CACHE_DURATION) {
+      console.log('🚀 Using cached role for user', user.email)
+      const role = cached.role
+      const permissions = ROLE_PERMISSIONS[role]
+
+      const userWithRole: UserWithRole = {
+        id: user.id,
+        email: user.email!,
+        role,
+        permissions,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      }
+
+      return { user: userWithRole, session }
+    }
+
     // Use the database function to get role (bypasses RLS issues)
     const { data: roleData, error: roleError } = await supabase
       .rpc('get_user_role')
@@ -63,6 +85,9 @@ export async function getCurrentUserWithRoleFromSession(): Promise<{ user: UserW
         // Default to student role if everything fails
         const role = 'student' as UserRole
         const permissions = ROLE_PERMISSIONS[role]
+
+        // Cache the result
+        roleCache.set(user.id, { role, timestamp: Date.now() })
 
         console.log('getCurrentUserWithRoleFromSession debug (fallback to student):', {
           userId: user.id,
@@ -85,6 +110,9 @@ export async function getCurrentUserWithRoleFromSession(): Promise<{ user: UserW
       const role = fallbackData?.role as UserRole || 'student'
       const permissions = ROLE_PERMISSIONS[role]
 
+      // Cache the result
+      roleCache.set(user.id, { role, timestamp: Date.now() })
+
       const userWithRole: UserWithRole = {
         id: user.id,
         email: user.email!,
@@ -99,6 +127,9 @@ export async function getCurrentUserWithRoleFromSession(): Promise<{ user: UserW
     
     const role = roleData as UserRole || 'student'
     const permissions = ROLE_PERMISSIONS[role]
+
+    // Cache the successful result
+    roleCache.set(user.id, { role, timestamp: Date.now() })
 
     console.log('getCurrentUserWithRoleFromSession debug:', {
       userId: user.id,
@@ -434,5 +465,19 @@ export async function checkRoleAuth(request: Request, requiredRole: UserRole) {
   } catch (error) {
     console.error('Role auth check error:', error)
     return { authorized: false, error: 'Internal server error' }
+  }
+}
+
+/**
+ * Clear role cache for a specific user or all users
+ * Call this when user signs out or role changes
+ */
+export function clearRoleCache(userId?: string) {
+  if (userId) {
+    roleCache.delete(userId)
+    console.log('🗑️ Cleared role cache for user:', userId)
+  } else {
+    roleCache.clear()
+    console.log('🗑️ Cleared all role cache')
   }
 } 
