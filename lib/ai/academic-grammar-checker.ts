@@ -89,48 +89,67 @@ export async function checkAcademicGrammar(
       model: openai("gpt-4o-mini"),
       schema: AcademicSuggestionSchema,
       prompt: `
-        You are an expert spelling and grammar checker specializing in ${academicLevel} level writing.
+        You are a conservative academic writing checker specializing in ${academicLevel} level writing.
         ${subjectContext}${levelContext}
         
-        Analyze the following text with PRIORITY FOCUS on the MOST RECENT CONTENT (typically the last 10-15 words), then check the entire text for:
+        CRITICAL INSTRUCTION: Only flag issues you are absolutely certain about (90%+ confidence). 
+        When in doubt, DO NOT flag. It's better to miss an issue than create false positives.
         
-        1. SPELLING ERRORS (highest priority):
-           - Misspelled words
-           - Incorrect word forms
-           - Typos and character transpositions
-           - Homophones used incorrectly (their/there/they're, your/you're, etc.)
-           - Common spelling mistakes
+        PRIORITY FOCUS: Check MOST RECENT CONTENT first (last 10-15 words), then entire text.
         
-        2. GRAMMAR ERRORS (high priority):
-           - Subject-verb agreement errors
-           - Verb tense inconsistencies and incorrect forms
-           - Pronoun-antecedent agreement
-           - Sentence fragments and run-on sentences
-           - Comma splices and semicolon misuse
-           - Apostrophe errors (possessive vs. plural)
-           - Parallel structure violations
-           - Dangling and misplaced modifiers
-           - Incorrect preposition usage
-           - Article errors (a, an, the)
-           - Comparative and superlative form errors
-           - Double negatives
+        DEFINITE ERRORS TO FLAG (only if very confident):
         
-        For each error found:
-        - Provide exact character position where error starts (0-based index)
-        - Give the correct spelling or grammar form
-        - Briefly explain the error type
-        - Rate confidence (0-100%) in your correction
+        1. SPELLING ERRORS (flag only if 95%+ confident):
+           - Obviously misspelled words with clear corrections
+           - Clear typos (character transpositions, missing letters)
+           - Wrong homophones in unambiguous context (their/there/they're when meaning is clear)
+           - Common spelling mistakes with obvious fixes
         
-        SPECIAL INSTRUCTIONS FOR INCREMENTAL CHECKING:
-        - If this appears to be a fragment (last few words), focus heavily on spelling and basic grammar
-        - For recently typed content, prioritize immediate errors over style suggestions
-        - Be especially careful with character positions - they must be precise
-        - Focus on errors that are clear and unambiguous
+        2. GRAMMAR ERRORS (flag only if 90%+ confident):
+           - Clear subject-verb agreement errors ("He are going")
+           - Obvious verb tense mistakes ("Yesterday I go to school")
+           - Sentence fragments that are clearly incomplete
+           - Run-on sentences with obvious comma splice errors
+           - Clear apostrophe mistakes (possessive vs. plural confusion)
+           - Wrong prepositions in standard phrases
+           - Clear article errors (a/an/the in obvious contexts)
+        
+        DO NOT FLAG:
+        - Correctly spelled but uncommon words
+        - Technical terms, proper nouns, brand names
+        - Creative writing or intentional stylistic choices
+        - Complex but grammatically correct sentences
+        - Informal language that's contextually appropriate
+        - Style preferences or optional improvements
+        - Words that might be foreign language terms
+        - Specialized academic or domain-specific vocabulary
+        - Colloquialisms or dialectical variations
+        - Contractions (unless specifically incorrect)
+        
+        SPECIAL CARE FOR INCREMENTAL CHECKING:
+        - If analyzing a text fragment, be extra cautious
+        - Focus on obvious spelling/grammar errors only
+        - Don't flag incomplete sentences as fragments if they appear to be work-in-progress
+        - Position calculations must be precise (0-based character index)
+        
+        CONFIDENCE REQUIREMENTS:
+        - Spelling: 95%+ confidence required
+        - Grammar: 90%+ confidence required  
+        - Style: 85%+ confidence required (use sparingly)
+        - Only return suggestions that meet these thresholds
+        
+        For each DEFINITE error:
+        - Exact character position (0-based, count carefully)
+        - Precise problematic text
+        - Clear correction
+        - Brief explanation of the specific error
+        - Honest confidence rating (0-100%)
         
         Text to analyze:
         "${text}"
         
-        Return only clear spelling and grammar errors, ordered by confidence and severity.
+        REMEMBER: Conservative checking prevents user frustration. Only flag clear, unambiguous errors.
+        Return only high-confidence errors, ordered by confidence and severity.
       `,
     })
 
@@ -149,6 +168,43 @@ export async function checkAcademicGrammar(
         academicContext: suggestion.academicContext,
         grammarRule: suggestion.grammarRule,
       }))
+      // Filter out low-confidence suggestions to prevent false positives
+      .filter((suggestion) => {
+        const minConfidence = suggestion.type === 'spelling' ? 95 : 
+                             suggestion.type === 'grammar' ? 90 : 85
+        return (suggestion.confidence || 0) >= minConfidence
+      })
+      // Additional filtering for common false positives
+      .filter((suggestion) => {
+        const originalLower = suggestion.originalText.toLowerCase()
+        
+        // Don't flag common proper nouns or technical terms
+        const commonProperNouns = ['google', 'facebook', 'twitter', 'youtube', 'instagram', 
+                                  'microsoft', 'apple', 'amazon', 'netflix', 'zoom', 'covid', 
+                                  'iphone', 'android', 'wifi', 'bluetooth', 'javascript', 'python',
+                                  'github', 'linkedin', 'whatsapp', 'spotify', 'uber', 'airbnb']
+        
+        if (commonProperNouns.includes(originalLower)) {
+          return false
+        }
+        
+        // Don't flag single letters (often part of abbreviations or variables)
+        if (suggestion.originalText.length === 1) {
+          return false
+        }
+        
+        // Don't flag words that are likely abbreviations or acronyms
+        if (/^[A-Z]{2,}$/g.test(suggestion.originalText)) {
+          return false
+        }
+        
+        // Don't flag contractions unless explicitly marked as grammar errors
+        if (suggestion.originalText.includes("'") && suggestion.type !== 'grammar') {
+          return false
+        }
+        
+        return true
+      })
       .sort((a, b) => {
         // Sort by confidence and severity
         const severityWeight = { high: 3, medium: 2, low: 1 }

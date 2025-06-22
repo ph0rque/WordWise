@@ -98,7 +98,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         // Close modal and let the app handle redirect
         setTimeout(() => {
           onClose()
-          window.location.reload() // Refresh to trigger auth state change
         }, 1000)
       }
     } catch (err) {
