@@ -339,9 +339,37 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
           <div className="p-4 text-center text-slate-500 flex-1 flex flex-col justify-center">
             <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No documents yet</p>
-            <Button variant="link" className="text-xs p-0 h-auto mt-1" onClick={() => onNewDocument({} as Document)}>
+            <div className="mt-2 space-y-1">
+                          <Button variant="link" className="text-xs p-0 h-auto" onClick={async () => {
+              // Create a new document and navigate to it
+              const supabase = getSupabaseClient()
+              const { data: userData, error: userError } = await supabase.auth.getUser()
+              
+              if (userError || !userData.user) {
+                console.error("Error getting user:", userError)
+                return
+              }
+
+              const { data, error } = await supabase
+                .from("documents")
+                .insert({ 
+                  title: "Untitled Document", 
+                  content: "",
+                  user_id: userData.user.id
+                })
+                .select()
+                .single()
+                
+              if (error) {
+                console.error("Error creating document:", error)
+              } else if (data) {
+                window.location.href = `/documents/${data.id}`
+              }
+            }}>
               Create your first document
             </Button>
+
+            </div>
           </div>
         ) : !needsSetup ? (
           <div className="flex-1 overflow-y-auto">
@@ -351,7 +379,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
                 className={`flex items-center justify-between p-3 border-b hover:bg-slate-50 cursor-pointer ${
                   currentDocumentId === doc.id ? "bg-emerald-50 border-emerald-200" : ""
                 }`}
-                onClick={() => onSelectDocument(doc)}
+                onClick={() => window.location.href = `/documents/${doc.id}`}
               >
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-medium truncate">{doc.title}</h4>
@@ -364,7 +392,7 @@ export function DocumentManager({ onSelectDocument, onNewDocument, currentDocume
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onSelectDocument(doc)}>
+                    <DropdownMenuItem onClick={() => window.location.href = `/documents/${doc.id}`}>
                       <Edit className="w-4 h-4 mr-2" />
                       Edit
                     </DropdownMenuItem>

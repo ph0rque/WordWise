@@ -127,8 +127,14 @@ export function MyRecordings({ className = '', documentId, documentTitle }: MyRe
   };
 
   const handleViewRecording = (recording: StudentRecording) => {
-    setSelectedRecording(recording);
-    setShowPlayback(true);
+    // If we have documentId prop, navigate to the RESTful session page
+    if (documentId) {
+      window.location.href = `/documents/${documentId}/sessions/${recording.id}`;
+    } else {
+      // Fallback to modal for non-document-specific views
+      setSelectedRecording(recording);
+      setShowPlayback(true);
+    }
   };
 
   const formatDuration = (durationMs?: number) => {

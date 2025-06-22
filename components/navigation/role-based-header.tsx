@@ -129,6 +129,8 @@ export function RoleBasedHeader({ user, onSignOut, onToggleSidebar }: RoleBasedH
               </>
             )}
             
+
+            
             <DropdownMenuItem onClick={handleSettings}>
               <Settings className="h-4 w-4 mr-2" />
               Settings

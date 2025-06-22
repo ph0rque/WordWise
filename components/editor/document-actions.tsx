@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { MoreVertical, FilePlus, Save, Trash2, List, BarChart3 } from "lucide-react"
 import {
   DropdownMenu,
@@ -9,10 +8,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { MyRecordings } from "@/components/student/my-recordings"
 import { useUserRole } from "@/lib/hooks/use-user-role"
+import { useRouter } from "next/navigation"
 
 interface DocumentActionsProps {
   onNew: () => void
@@ -25,8 +23,17 @@ interface DocumentActionsProps {
 }
 
 export function DocumentActions({ onNew, onSave, onDelete, onSwitch, isSaving, documentId, documentTitle }: DocumentActionsProps) {
-  const [showMySessions, setShowMySessions] = useState(false)
   const { isStudent } = useUserRole()
+  const router = useRouter()
+
+  const handleViewSessions = () => {
+    if (documentId) {
+      router.push(`/documents/${documentId}/sessions`)
+    } else {
+      // Fallback to old sessions page if no document ID
+      router.push('/sessions')
+    }
+  }
 
   return (
     <>
@@ -63,7 +70,7 @@ export function DocumentActions({ onNew, onSave, onDelete, onSwitch, isSaving, d
           {isStudent && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setShowMySessions(true)}>
+              <DropdownMenuItem onClick={handleViewSessions}>
                 <BarChart3 className="mr-2 h-4 w-4" />
                 <span>My Sessions</span>
               </DropdownMenuItem>
@@ -77,23 +84,6 @@ export function DocumentActions({ onNew, onSave, onDelete, onSwitch, isSaving, d
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      {/* My Sessions Dialog */}
-      <Dialog open={showMySessions} onOpenChange={setShowMySessions}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {documentTitle ? `Sessions for "${documentTitle}"` : 'My Writing Sessions'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="overflow-y-auto">
-            <MyRecordings 
-              documentId={documentId}
-              documentTitle={documentTitle}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 } 
