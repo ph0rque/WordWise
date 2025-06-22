@@ -124,7 +124,7 @@ const ReadabilityDashboard: React.FC<ReadabilityDashboardProps> = ({
           strengths: result.strengths || [],
           improvements: result.improvementAreas || [],
           recommendations: result.recommendations || [],
-          score: Math.round(Math.max(0, result.metrics.fleschReadingEase)), // Ensure positive score
+          score: Math.round(Math.max(0, Math.min(100, result.metrics.fleschReadingEase))), // Cap score between 0-100
           wordCount: result.metrics.wordCount,
           sentenceCount: result.metrics.sentenceCount,
           paragraphCount: result.metrics.paragraphCount

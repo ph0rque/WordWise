@@ -13,6 +13,7 @@ import type { Document } from "@/lib/types"
 import { useRoleBasedFeatures } from "@/lib/hooks/use-user-role"
 import ReadabilityDashboard from "@/components/analysis/readability-dashboard"
 import VocabularyEnhancer from "@/components/analysis/vocabulary-enhancer"
+import { countWords } from "@/lib/utils"
 
 interface RightSidebarProps {
   document: Document | null
@@ -32,10 +33,7 @@ function htmlToPlainText(html: string): string {
   return tempDiv.textContent || tempDiv.innerText || ""
 }
 
-// Helper function to count words in plain text
-function countWords(text: string): number {
-  return text.trim() ? text.trim().split(/\s+/).filter(word => word.length > 0).length : 0
-}
+// Using standardized countWords function from @/lib/utils
 
 export function RightSidebar({ document, aiAvailable, onCollapse }: RightSidebarProps) {
   const { canUseAITutor } = useRoleBasedFeatures()

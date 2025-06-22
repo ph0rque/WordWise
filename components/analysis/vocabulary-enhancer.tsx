@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Zap
 } from 'lucide-react'
+import { countWords } from '@/lib/utils'
 
 // Types from the vocabulary analysis library
 interface VocabularySuggestion {
@@ -163,7 +164,7 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
       } else {
         console.error('Failed to analyze vocabulary')
         // Create a minimal enhancement object with actual word count
-        const wordCount = (textToAnalyze.match(/\b\w+\b/g) || []).length
+        const wordCount = countWords(textToAnalyze) // Use standardized word counting
         const minimalEnhancement: VocabularyEnhancement = {
           analysis: {
             totalWords: wordCount,
@@ -185,7 +186,7 @@ const VocabularyEnhancer: React.FC<VocabularyEnhancerProps> = ({
     } catch (error) {
       console.error('Error analyzing vocabulary:', error)
       // Create a minimal enhancement object with actual word count
-      const wordCount = (textToAnalyze.match(/\b\w+\b/g) || []).length
+      const wordCount = countWords(textToAnalyze) // Use standardized word counting
       const minimalEnhancement: VocabularyEnhancement = {
         analysis: {
           totalWords: wordCount,

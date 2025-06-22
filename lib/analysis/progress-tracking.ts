@@ -2,6 +2,7 @@
 // Tracks student writing progress over time with detailed analytics
 
 import { Suggestion, EnhancedSuggestion } from '@/lib/types'
+import { countWords, extractWords } from "@/lib/utils"
 
 export interface WritingSession {
   id: string
@@ -166,7 +167,7 @@ export function calculateSessionMetrics(
   suggestions: EnhancedSuggestion[]
 ): SessionMetrics {
   // Basic text metrics
-  const words = text.trim().split(/\s+/).filter(word => word.length > 0)
+  const words = extractWords(text) // Use standardized word extraction
   const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0)
   const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0)
   

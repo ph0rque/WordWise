@@ -1,6 +1,8 @@
 // Vocabulary enhancement engine for academic writing
 // Provides suggestions for improving word choice and academic vocabulary usage
 
+import { countWords, extractWords } from "@/lib/utils"
+
 export interface VocabularySuggestion {
   originalWord: string
   suggestions: string[]
@@ -318,7 +320,7 @@ export function analyzeVocabulary(
     }
   }
   
-  const words = text.toLowerCase().match(/\b\w+\b/g) || []
+  const words = extractWords(text) // Use standardized word extraction
   const uniqueWords = new Set(words)
   const academicWords = words.filter(word => isAcademicWord(word, targetLevel))
   const informalWords = words.filter(word => isInformalWord(word))

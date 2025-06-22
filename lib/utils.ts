@@ -6,6 +6,31 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Standardized word counting function used across all analysis components
+ * Uses word boundary regex for consistent results
+ */
+export function countWords(text: string): number {
+  if (!text || !text.trim()) return 0
+  
+  // Use word boundary regex to match words consistently
+  // This handles punctuation, contractions, and special characters properly
+  const words = text.match(/\b\w+\b/g)
+  return words ? words.length : 0
+}
+
+/**
+ * Extract words as an array for vocabulary analysis
+ * Uses the same method as countWords for consistency
+ */
+export function extractWords(text: string): string[] {
+  if (!text || !text.trim()) return []
+  
+  // Use word boundary regex and normalize to lowercase
+  const words = text.toLowerCase().match(/\b\w+\b/g)
+  return words || []
+}
+
+/**
  * Debug utility to track loading states and identify bottlenecks
  */
 export class LoadingTracker {

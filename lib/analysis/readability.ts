@@ -1,6 +1,8 @@
 // Readability analysis utilities for academic writing assessment
 // Implements multiple readability formulas for comprehensive text analysis
 
+import { countWords, extractWords } from "@/lib/utils"
+
 export interface ReadabilityMetrics {
   // Basic text statistics
   wordCount: number
@@ -151,7 +153,7 @@ function calculateTextStatistics(text: string): {
   
   // Clean and split text
   const cleanText = text.replace(/\s+/g, ' ').trim()
-  const words = cleanText.split(/\s+/).filter(word => word.length > 0)
+  const words = extractWords(text) // Use standardized word extraction
   
   // Improved sentence splitting - handle ellipsis and ensure proper boundaries
   const sentences = text
@@ -182,8 +184,7 @@ function calculateTextStatistics(text: string): {
   
   // Calculate syllables
   const syllableCount = words.reduce((total, word) => {
-    const cleanWord = word.replace(/[^\w]/g, '')
-    return total + countSyllables(cleanWord)
+    return total + countSyllables(word)
   }, 0)
   
   return {
@@ -192,7 +193,7 @@ function calculateTextStatistics(text: string): {
     syllableCount,
     characterCount: cleanText.length,
     paragraphCount: Math.max(1, finalParagraphs.length),
-    words: words.map(word => word.replace(/[^\w]/g, '').toLowerCase()).filter(w => w.length > 0)
+    words: words // words are already cleaned and lowercase from extractWords
   }
 }
 
@@ -200,6 +201,7 @@ function calculateTextStatistics(text: string): {
  * Calculate Flesch Reading Ease score
  * Formula: 206.835 - (1.015 × ASL) - (84.6 × ASW)
  * Where ASL = Average Sentence Length, ASW = Average Syllables per Word
+ * Note: Raw score can exceed 100 for very simple text, will be capped in final output
  */
 function calculateFleschReadingEase(
   wordCount: number,
@@ -407,7 +409,7 @@ export function calculateReadabilityMetrics(
     syllableCount: stats.syllableCount,
     characterCount: stats.characterCount,
     paragraphCount: stats.paragraphCount,
-    fleschReadingEase: Math.round(fleschReadingEase * 10) / 10,
+    fleschReadingEase: Math.round(Math.max(0, Math.min(100, fleschReadingEase)) * 10) / 10,
     fleschKincaidGradeLevel: Math.round(fleschKincaidGradeLevel * 10) / 10,
     colemanLiauIndex: Math.round(colemanLiauIndex * 10) / 10,
     automatedReadabilityIndex: Math.round(automatedReadabilityIndex * 10) / 10,

@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
-import { cn } from "@/lib/utils"
+import { cn, countWords } from "@/lib/utils"
 import type { User as SupabaseUser, Document } from "@/lib/types"
 import { 
   MobileResponsiveLayout, 
@@ -238,7 +238,7 @@ export function MobileAcademicEditor({ user, onSignOut, currentDocument, onSave 
   }, [isWriting])
 
   // Calculate stats
-  const wordCount = text.trim().split(/\s+/).filter(word => word.length > 0).length
+      const wordCount = countWords(text) // Use standardized word counting
   const paragraphCount = text.split('\n\n').filter(p => p.trim().length > 0).length
   const estimatedReadingTime = Math.ceil(wordCount / 200)
 
