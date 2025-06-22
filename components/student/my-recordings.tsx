@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { PlaybackViewer } from '@/components/keystroke/playback-viewer';
+import { ChatSessions } from './chat-sessions';
 
 interface StudentRecording {
   id: string;
@@ -205,8 +206,22 @@ export function MyRecordings({ className = '', documentId, documentTitle }: MyRe
 
   return (
     <div className={`space-y-6 ${className}`}>
-      {/* Overall Stats */}
-      {overallStats && (
+      {/* Session Type Tabs */}
+      <Tabs defaultValue="keystrokes" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="keystrokes" className="flex items-center gap-2">
+            <Type className="h-4 w-4" />
+            Keystroke Sessions
+          </TabsTrigger>
+          <TabsTrigger value="chats" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            AI Tutor Chats
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="keystrokes" className="space-y-6">
+          {/* Overall Stats */}
+          {overallStats && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -362,6 +377,15 @@ export function MyRecordings({ className = '', documentId, documentTitle }: MyRe
           </div>
         </DialogContent>
       </Dialog>
+          </TabsContent>
+
+          <TabsContent value="chats" className="space-y-6">
+            <ChatSessions 
+              documentId={documentId}
+              documentTitle={documentTitle}
+            />
+          </TabsContent>
+        </Tabs>
     </div>
   );
 } 
