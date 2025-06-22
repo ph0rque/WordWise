@@ -4,232 +4,239 @@
 WordWise is a functional grammar-checking application with core features implemented. The application is currently operational with both AI-powered and rule-based grammar checking capabilities. **Recent authentication issues have been resolved**, and the admin functionality is now working properly. **Tab switching performance has been optimized** to prevent unnecessary reloads.
 
 ## Recent Work & Changes
-**December 2024 - Authentication System Fix ✅ COMPLETED**
+**December 2024 - Fixed Admin Access to Student Keystroke Recordings ✅ JUST COMPLETED**
 
-### Critical Bug Fix - Admin Authentication & RLS Infinite Recursion
-**Problem Resolved**: Admin users were experiencing authentication errors when trying to add students via the admin interface.
+### Admin Recording Access Permission Fix
+**Issue Resolved**: Fixed a critical permission issue where administrators could not view student keystroke recordings through the "View Playback" button due to user ID mismatch in the API.
 
-**Root Cause Identified**: Two-part authentication issue:
-1. **Client-Server Session Sync**: Client-side Supabase storing auth tokens in localStorage, but server-side API routes expecting authentication via cookies
-2. **RLS Infinite Recursion**: Row Level Security policies on `user_roles` table causing infinite loops when checking admin permissions
+**Problem Identified**:
+- When admins clicked "View Playback", the `KeystrokePlaybackEngine.loadRecording()` method failed with "Failed to fetch recording"
+- The API endpoint `/api/keystroke/recordings?recordingId=${recordingId}` was checking for `user_id` equality
+- Admin's user ID didn't match the student's user ID who created the recording
+- This caused the `getSingleRecordingWithEvents` function to return "Recording not found" for admin users
+
+**Root Cause**:
+- The `getSingleRecordingWithEvents` function was filtering recordings by `user_id` for all users
+- This worked for students viewing their own recordings but blocked admin access to student recordings
+- No role-based access control was implemented for single recording retrieval
 
 **Solution Implemented**:
-1. **Enhanced Client-Side Session Management**: Modified `lib/supabase/client.ts` to automatically store auth tokens in cookies alongside localStorage
-2. **Upgraded Server-Side Authentication**: Made `createClient()` async and enhanced cookie reading capabilities  
-3. **Fixed RLS Infinite Recursion**: Updated admin API routes to use service role client (`supabaseAdmin`) that bypasses RLS for admin operations
-4. **Improved Middleware**: Enhanced session validation and refresh token handling
+1. **Admin Role Detection**: Added role checking in the main GET handler for single recording requests
+2. **Conditional User Filtering**: Modified `getSingleRecordingWithEvents` to accept `userId` as nullable
+3. **Permission-Based Access**: 
+   - **Admin users**: Can access any recording (no user ID filter)
+   - **Student users**: Can only access their own recordings (user ID filter applied)
 
-**Technical Details of RLS Fix**:
-- The `user_roles` table had RLS policies that checked `EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role = 'admin')`
-- This created infinite recursion: to check if user is admin → query user_roles → trigger RLS policy → check if user is admin → loop
-- Solution: Use service role client for admin permission checks, bypassing RLS entirely
-- Admin operations now use `supabaseAdmin` client with elevated privileges
+**Technical Changes**:
+1. **API Route Enhancement** (`/api/keystroke/recordings`):
+   - Added role checking for single recording requests
+   - Pass `null` as userId for admin users to bypass user filtering
+   - Pass actual userId for student users to maintain security
 
-**Files Modified in This Fix**:
-- `lib/supabase/client.ts` - Added cookie-based session persistence
-- `lib/supabase/server.ts` - Async authentication with cookie reading
-- `middleware.ts` - Enhanced session management
-- `app/api/admin/students/assign-role/route.ts` - Fixed async auth + RLS bypass with service role
-- `app/api/admin/students/route.ts` - Fixed async auth + RLS bypass with service role
-- `app/api/admin/stats/route.ts` - Fixed async auth + RLS bypass with service role
-- `app/api/account/delete/route.ts` - Fixed async auth
-- Multiple other API routes updated
+2. **Function Signature Update**:
+   - Changed `getSingleRecordingWithEvents(supabase, userId: string, recordingId)` 
+   - To `getSingleRecordingWithEvents(supabase, userId: string | null, recordingId)`
 
-**Impact**: ✅ Admin users can now successfully add students without authentication or permission errors
+3. **Query Logic Update**:
+   - Conditional user ID filtering based on role
+   - Maintains security for students while enabling admin access
 
-### Previously Completed Features
-1. **Core Text Editor**: Fully functional with real-time grammar checking
-2. **Suggestion System**: Multi-type suggestions (grammar, spelling, style, clarity, tone)
-3. **Document Management**: CRUD operations for user documents
-4. **Authentication**: Supabase-based user authentication with role-based access
-5. **AI Integration**: OpenAI API integration with fallback to basic checking
-6. **UI Components**: Complete shadcn/ui component library integration
-7. **Admin Dashboard**: Complete admin interface with student management capabilities
+**Security Considerations**:
+- ✅ **Student Privacy Maintained**: Students can still only access their own recordings
+- ✅ **Admin Oversight Enabled**: Administrators can now access any student's recordings for educational purposes
+- ✅ **Role-Based Security**: Access control based on authenticated user roles
+- ✅ **No Data Exposure**: No additional data is exposed, only access permissions are adjusted
 
-### Current Architecture Status
-- **Frontend**: Next.js 15 with React 19 ✅
-- **Backend**: API routes for grammar checking ✅
-- **Database**: Supabase integration for documents ✅
-- **Authentication**: Client-server session sync ✅ **RECENTLY FIXED**
-- **RLS & Permissions**: Service role bypass for admin operations ✅ **RECENTLY FIXED**
-- **Styling**: Tailwind CSS with responsive design ✅
-- **Type Safety**: Comprehensive TypeScript coverage ✅
+**Benefits**:
+- **Full Admin Functionality**: Administrators can now successfully view keystroke playback for any student
+- **Educational Oversight**: Enables proper monitoring and analysis of student writing processes
+- **Consistent Experience**: Admin and student UIs now work identically for playback viewing
+- **Maintained Security**: Student data remains protected while enabling appropriate admin access
 
-## Active Development Focus
+This fix ensures that the DocumentViewer's "View Playback" functionality works correctly for administrators viewing student keystroke recordings.
 
-### Recently Completed (Latest Update)
-1. **Enhanced Grammar & Spelling Checking System** ✅ **JUST COMPLETED**
-   - **Problem Addressed**: Grammar checking was inefficient and lacked intelligent user interaction handling
-   - **Solution Implemented**:
-     - **Full Document Check on Load**: Enhanced initial document loading to reliably check the entire document when user first opens the page
-     - **Incremental Checking During Typing**: Implemented smart incremental checking that analyzes only the last 15 words when user is typing (instead of re-checking entire document)
-     - **Immediate Highlight Removal**: Added intelligent highlight removal when user starts editing a highlighted/underlined word, followed by automatic re-checking after edit completion
-     - **Enhanced AI Prompts**: Improved academic grammar checker prompts to better handle incremental scenarios and focus on recently typed content
-     - **Smart Performance Optimization**: Reduced API calls by 70-80% through intelligent text segmentation and caching
-   - **Technical Details**:
-     - Modified `debouncedGrammarCheck` to accept `isIncremental` and `lastWordsOnly` parameters
-     - Implemented text segmentation to check last 15 words during typing vs full document on load/paste
-     - Added position offset calculation for accurate suggestion positioning in incremental mode
-     - Enhanced suggestion merging logic to preserve existing suggestions while adding new ones
-     - Added comprehensive event listeners on highlighted spans to detect editing start (click, keydown, input, focus)
-     - Implemented immediate DOM manipulation to remove highlights when user starts editing
-     - Added automatic re-checking after 2-second editing completion delay
-   - **User Experience Improvements**:
-     - **Faster Response**: Users see grammar suggestions much faster during typing
-     - **No Distracting Re-highlights**: Highlights disappear immediately when user starts fixing them
-     - **Intelligent Re-checking**: System waits for user to finish editing before re-checking
-     - **Better Performance**: Reduced lag and API costs through smarter checking strategy
-   - **Files Modified**: `components/text-editor.tsx`, `lib/ai/academic-grammar-checker.ts`
-   - **Impact**: ✅ Grammar checking is now more responsive, less intrusive, and significantly more performant while maintaining accuracy
+**December 2024 - Implemented Functional View Playback and View Chat Buttons ✅ COMPLETED**
 
-### Previously Completed (Earlier Updates)
-1. **Fixed Readability Analysis Grade Level Overestimation** ✅ **JUST COMPLETED**
-   - **Problem Resolved**: Readability analysis was severely overestimating difficulty levels (3rd grade essays showing as 9th grade, 11th grade essays showing as 20th grade)
-   - **Root Cause**: Classic readability formulas (Flesch-Kincaid, Coleman-Liau, etc.) designed for published text, not student writing, causing systematic overestimation
-   - **Solution Implemented**:
-     - **Student-Calibrated Scaling**: Added calibration function that reduces grade levels by 30-40% for elementary, 25-35% for high school, 20-30% for college
-     - **Writing Characteristics Adjustment**: Additional calibration based on sentence length and vocabulary complexity
-     - **Realistic Grade Bounds**: Ensured grade levels stay within reasonable 1-16 range
-     - **Empirical Calibration**: Based calibration factors on actual student writing patterns vs. published academic text
-   - **Technical Details**:
-     - Added `calibrateGradeLevelForStudents()` function with tier-based reduction factors
-     - Enhanced grade level calculation to use calibrated values instead of raw formula averages
-     - Applied sentence structure and vocabulary complexity adjustments
-     - Maintained original formula calculations but applied realistic scaling for final grade level
-   - **Files Modified**: `lib/analysis/readability.ts`
-   - **Impact**: ✅ Grade level analysis now accurately reflects actual student writing difficulty (3rd grade → ~3-4, 8th grade → ~7-9, 11th grade → ~10-12)
-   - **Enhanced**: Changed reading level classification so grade 13+ shows as "Adult" instead of "College"/"Graduate" for better UX
-   - **UI Improvements**: Grade Level now displays "Adult" for grades > 12, rounded whole numbers for grade levels ≤ 12, and rounded reading time to whole minutes
+### Interactive DocumentViewer Enhancement
+**Enhancement Implemented**: Added fully functional "View Playback" and "View Chat" buttons to the DocumentViewer component, integrating the same UI components used by students for viewing keystroke recordings and chat sessions.
 
-2. **Fixed Tab Switching AND App Switching Reload Issue** ✅ **ENHANCED**
-   - **Problem Resolved**: App was reloading when switching tabs away and back OR when switching to other apps and returning
-   - **Root Cause**: Aggressive authentication re-initialization and session checking on both tab visibility changes AND window focus/blur events
-   - **Solution Implemented**:
-     - **Session Caching**: Added 30-second session cache in Supabase client to prevent unnecessary auth API calls
-     - **Debounced Auth Refresh**: Implemented 1-second debounce on auth state changes to prevent excessive refreshes
-     - **Smart Focus Management**: Enhanced TabFocusManager to handle both tab switching AND app switching
-     - **Refresh Suppression**: Added global suppression mechanism that prevents any refreshes for 2 seconds after quick switches
-     - **Dual Event Handling**: Properly differentiate between tab switching (visibility) and app switching (focus/blur)
-     - **Optimized Auth Flow**: Use cached sessions and respect suppression flags
-   - **Technical Details**:
-     - Enhanced `TabFocusManager` to track both visibility changes and window focus/blur events
-     - Added `window.shouldSuppressRefresh()` global function to coordinate suppression across components
-     - Track separate timers for tab switching vs app switching with different thresholds
-     - Added suppression checks in `useUserRole` and main auth initialization
-     - Emit custom events (`suppressRefresh`, `longAppReturn`) for component coordination
-   - **Files Modified**: `lib/supabase/client.ts`, `lib/hooks/use-user-role.ts`, `app/page.tsx`, `app/ClientLayout.tsx`, `components/tab-focus-manager.tsx`
-   - **Impact**: ✅ App now maintains state for BOTH tab switching AND app switching, only refreshing after 30+ seconds of absence
+**Major Functionality Added**:
+1. **Functional View Playback Button**: 
+   - Integrated `PlaybackViewer` component from student UI
+   - Opens keystroke recordings in a full-featured playback interface
+   - Shows recording controls, content playback, and analytics
+   - Uses the same UI that students see when viewing their own recordings
 
-### Previously Completed (Earlier Updates)
-1. **Fixed Production Loading Timeout Issue** ✅ **JUST COMPLETED**
-   - **Problem Resolved**: Production site getting stuck at "useUserRole: Getting session..." with infinite loading
-   - **Root Cause**: Authentication operations hanging indefinitely in production environment without timeouts
-   - **Solution Implemented**:
-     - **Added Operation Timeouts**: 10s timeout for session operations, 8s for role operations
-     - **Retry Logic**: Automatic retry with exponential backoff (max 3 attempts)
-     - **Error Recovery**: Graceful fallback to unauthenticated state after timeout
-     - **Better UX**: Loading spinner with error fallback after 15 seconds
-     - **User-Friendly Errors**: Clear error messages with troubleshooting tips
-   - **Technical Details**:
-     - Added `withTimeout` helper function to race promises against timers
-     - Enhanced `useUserRole` hook with retry logic and mounted state tracking
-     - Improved `getCurrentUserRole` with timeout handling and error propagation
-     - Added `ErrorFallback` component with retry and refresh options
-     - Connection-specific error handling with troubleshooting guidance
-   - **Files Modified**: `lib/hooks/use-user-role.ts`, `lib/auth/roles.ts`, `app/ClientLayout.tsx`
-   - **Impact**: ✅ Production site now recovers from connection issues and provides clear user feedback
+2. **Functional View Chat Button**:
+   - Integrated `ChatMessageComponent` for displaying chat history
+   - Fetches and displays complete chat message history for sessions
+   - Shows formatted messages with proper user/assistant distinction
+   - Uses the same UI components that students see when viewing past chats
 
-2. **Fixed Dialog Accessibility Error** ✅ **COMPLETED**
-   - **Problem Resolved**: Console error "DialogContent requires a DialogTitle for accessibility" on homepage
-   - **Root Cause**: AuthModal component was missing required DialogTitle component for screen reader accessibility
-   - **Solution Implemented**:
-     - **Added DialogHeader and DialogTitle**: Imported and added the required Radix UI components
-     - **Screen Reader Only Title**: Used `sr-only` class to hide the title visually while keeping it accessible
-     - **Maintained Visual Design**: Existing CardTitle in the Card component continues to provide the visual title
-   - **Technical Details**:
-     - Added `DialogHeader` and `DialogTitle` imports to AuthModal component
-     - Wrapped DialogTitle with `sr-only` class to hide from visual display
-     - DialogTitle reads "WordWise Authentication" for screen readers
-     - Preserves existing visual hierarchy with CardTitle "WordWise"
-   - **Files Modified**: `components/landing/auth-modal.tsx`
-   - **Impact**: ✅ Eliminates accessibility warnings and improves screen reader experience
+**Technical Implementation**:
+1. **Component Integration**:
+   - Added imports for `PlaybackViewer` and `ChatMessageComponent`
+   - Added `ChatMessage` type for proper message formatting
+   - Integrated existing student UI components seamlessly
 
-2. **Fixed AI Tutor "Failed to fetch" Error** ✅ **COMPLETED**
-   - **Problem Resolved**: Users getting "TypeError: Failed to fetch" when trying to use the AI tutor chat
-   - **Root Cause**: Insufficient error handling and logging in the API route made it difficult to diagnose issues
-   - **Solution Implemented**:
-     - **Comprehensive Error Handling**: Added detailed error handling for all stages of the API request (body parsing, authentication, database operations, OpenAI API calls)
-     - **Enhanced Logging**: Added extensive console logging with emojis to track request flow and identify issues
-     - **Graceful Fallbacks**: API now returns 200 status with error flags instead of throwing uncaught exceptions
-     - **Client-Side Improvements**: Enhanced error handling in ChatPanel with specific error types and user-friendly messages
-     - **Better User Feedback**: Clear error messages that help users understand what went wrong and how to fix it
-   - **Technical Details**:
-     - Added comprehensive try-catch blocks for each operation stage
-     - Environment variable validation with helpful error messages
-     - Authentication error handling with specific user guidance
-     - OpenAI API error handling with fallback responses
-     - Database operation error handling with graceful degradation
-     - Client-side error type detection and appropriate messaging
-   - **Files Modified**: `app/api/ai/essay-tutor-chat/route.ts`, `components/tutor/chat-panel.tsx`
-   - **Impact**: ✅ AI tutor now provides clear error feedback instead of cryptic "Failed to fetch" errors
+2. **State Management**:
+   - Added dialog states: `showPlaybackViewer`, `showChatViewer`
+   - Added selection states: `selectedRecording`, `selectedChatSession`
+   - Added chat message state: `chatMessages`, `loadingChatMessages`
 
-2. **Enhanced AI Tutor with Markdown Rendering** ✅ **COMPLETED**
-   - **Markdown Support**: AI responses now properly render **bold**, *italic*, bullet points, and formatted text
-   - **Text Overflow Prevention**: Added proper text wrapping and overflow handling to prevent content from breaking layout
-   - **Enhanced Readability**: AI responses with structured content (lists, emphasis) now display beautifully formatted
-   - **Technical Implementation**:
-     - Created custom markdown parser for **bold** and *italic* text
-     - Added support for bullet point lists (•, -, *, ·)
-     - Implemented proper paragraph and list structure parsing
-     - Added `break-words`, `min-w-0`, and `overflow-hidden` classes for text overflow prevention
-   - **Files Modified**: `components/tutor/chat-message.tsx`
-   - **Impact**: ✅ AI responses are now properly formatted and never overflow, making them much more readable and professional
+3. **Handler Functions**:
+   - `handleViewPlayback()`: Opens playback viewer with selected recording
+   - `handleViewChat()`: Fetches chat messages and opens chat viewer
+   - Proper error handling and loading states for both functions
 
-2. **Fixed Grammar Tooltip Positioning** ✅ **COMPLETED**
-   - **Problem Resolved**: Grammar suggestion tooltips were getting cut off at the bottom of the screen
-   - **Smart Positioning**: Tooltips now automatically position above the text when there's insufficient space below
-   - **Enhanced UX**: Added visual indicators (colored borders) to show tooltip direction and prevent horizontal overflow
-   - **Technical Details**:
-     - Measures available space above and below target element
-     - Calculates tooltip dimensions before positioning
-     - Ensures tooltips stay within viewport boundaries
-     - Added safeguards for horizontal positioning to prevent off-screen tooltips
-   - **Files Modified**: `components/text-editor.tsx`
-   - **Impact**: ✅ Grammar tooltips are now always fully visible and accessible regardless of text position
+4. **UI Integration**:
+   - Connected buttons to handler functions with `onClick` events
+   - Added responsive dialog components for both playback and chat viewing
+   - Maintained consistent styling and user experience
 
-2. **Enhanced AI Tutor Interface & Context** ✅ **COMPLETED**
-   - **UI Improvements**: Removed "Student Mode" badge to reduce visual clutter and create cleaner interface
-   - **Enhanced Document Context**: 
-     - Fixed missing `documentContent` prop in RightSidebar → ChatPanel connection
-     - Enhanced AI prompt to include actual document content preview (up to 500 characters)
-     - AI now receives specific content context for targeted feedback and suggestions
-   - **Technical Changes**:
-     - Removed unused Badge import from ChatPanel component
-     - Updated prompt system to include document content preview with metadata
-     - AI can now reference specific content for structure, clarity, and writing improvement guidance
-   - **Files Modified**: `components/tutor/chat-panel.tsx`, `components/sidebar/right-sidebar.tsx`, `app/api/ai/essay-tutor-chat/route.ts`
-   - **Impact**: ✅ Cleaner UI and AI can now provide specific, contextual feedback about the actual document content
+**Data Flow**:
+- **Playback**: Uses recording ID to load full playback interface via `PlaybackViewer`
+- **Chat**: Fetches messages from `chat_messages` table filtered by session ID
+- **Message Formatting**: Converts database records to `ChatMessage` format with proper metadata handling
 
-2. **Fixed Scrolling Issues with Long Content** ✅ **COMPLETED**
-   - **Problem Resolved**: Users couldn't scroll up and down easily when they had a lot of content in the editor
-   - **Root Cause**: Layout containers used `overflow-hidden` and had conflicting height constraints that prevented proper scrolling
-   - **Solution Applied**:
-     - Replaced `overflow-hidden` with `min-h-0` for proper flex container behavior
-     - Added `flex-shrink-0` to headers to prevent them from shrinking
-     - Fixed nested scroll containers in TextEditor, RightSidebar, and ChatPanel
-     - Ensured proper scroll hierarchy: main container → editor container → content editor
-   - **Files Modified**: `app/page.tsx`, `components/text-editor.tsx`, `components/sidebar/right-sidebar.tsx`, `components/tutor/chat-panel.tsx`
-   - **Impact**: ✅ Users can now scroll smoothly through long documents and chat conversations
+**Benefits for Administrators**:
+- **Complete Recording Analysis**: Full playback controls and analytics for keystroke recordings
+- **Chat History Review**: Complete conversation history with proper formatting
+- **Consistent Experience**: Same UI as students see, ensuring familiarity
+- **Rich Functionality**: All features available to students are now available to admins
 
-2. **Major UI/UX Improvements Sprint - COMMITTED & PUSHED** ✅ **COMPLETED**
-   - **Collapsible Right Sidebar**: Students can now collapse writing tools for distraction-free focused writing
-   - **Always-Visible Save Button**: Moved from dropdown to dedicated button for better accessibility
-   - **Simplified Analysis Panels**: Streamlined readability dashboard and vocabulary enhancer for sidebar optimization
-   - **Removed Suggestions**: Eliminated distracting suggestion prompts from analysis panel for cleaner interface
-   - **Independent Scrolling**: Fixed right panel to scroll independently of editor size for better content access
-   - **Enhanced Layout**: Improved responsive grid layout and component organization
-   - **Performance Gains**: Reduced bundle size (394 insertions, 877 deletions) and cleaned unused code
-   - **Git Status**: Committed as `6ab41d9` and pushed to `
+This enhancement transforms the DocumentViewer from a static information display into a fully interactive tool for comprehensive student work analysis.
+
+**December 2024 - Fixed Keystroke Recordings API Database Relationship Issue ✅ COMPLETED**
+
+### Database Relationship Bug Fix
+**Issue Resolved**: Fixed a critical database relationship error in the keystroke recordings API that was preventing the Writing Sessions tab from loading recordings for documents.
+
+**Problem Identified**:
+- API was failing with error: `Could not find a relationship between 'keystroke_recordings' and 'user_id' in the schema cache`
+- The issue occurred when trying to join `keystroke_recordings` with `profiles:user_id` table
+- Supabase couldn't find the proper foreign key relationship for the profiles join
+
+**Solution Implemented**:
+1. **Removed Problematic Join**: Eliminated the `profiles:user_id` join that was causing the foreign key relationship error
+2. **Simplified Query**: Modified the admin query to use basic `select('*')` without complex joins
+3. **Added Document Filtering**: Enhanced the query to properly filter by `documentId` when provided
+4. **Maintained Functionality**: Kept all essential recording data while removing dependency on profile information
+
+**Technical Changes**:
+- Updated `/api/keystroke/recordings` route for admin access
+- Replaced complex join query with simple select and filter approach
+- Added proper document ID filtering for the admin view
+- Simplified user information to avoid database relationship dependencies
+
+**Benefits**:
+- **Immediate Fix**: Writing Sessions tab now loads recordings successfully
+- **Better Performance**: Simpler queries are faster and more reliable
+- **Reduced Complexity**: Eliminated unnecessary database joins
+- **Maintained Security**: Still respects user permissions and document filtering
+
+This fix ensures that administrators can now properly view keystroke recordings for specific documents in the DocumentViewer's Writing Sessions tab.
+
+**December 2024 - Added Writing Sessions Tab to Document Viewer ✅ COMPLETED**
+
+### Writing Sessions Tab Enhancement
+**Enhancement Implemented**: Added a comprehensive "Writing Sessions" tab to the admin DocumentViewer component that shows keystroke recordings for specific documents, providing detailed insights into student writing behavior.
+
+**Major Improvements Made**:
+1. **New Tab Structure**: Expanded DocumentViewer from 3 to 4 tabs
+   - Document Content
+   - Text Analysis  
+   - **Writing Sessions** (NEW)
+   - AI Chats
+
+2. **Keystroke Recording Display**: Comprehensive keystroke recording visualization
+   - **Recording Statistics**: Total keystrokes, characters, WPM, duration
+   - **Session Status**: Visual indicators for recording status (completed, active, etc.)
+   - **Timeline Information**: Start/end times with formatted dates
+   - **Session Analytics**: Focus score, productivity score, time on task, edit ratio
+
+3. **Data Integration**: 
+   - **API Integration**: Uses `/api/keystroke/recordings` with document filtering
+   - **Real-time Data**: Fetches recordings filtered by document ID and user ID
+   - **Analytics Enhancement**: Calculates derived metrics like editing ratios and productivity scores
+
+4. **User Experience Features**:
+   - **Action Buttons**: "View Playback" and "Analytics" buttons for each recording
+   - **Empty State**: Helpful message when no recordings exist
+   - **Responsive Design**: Grid layouts that adapt to different screen sizes
+   - **Visual Hierarchy**: Color-coded metrics and clear data presentation
+
+**Technical Implementation**:
+- Added `KeystrokeRecording` interface with comprehensive recording data structure
+- Implemented `fetchKeystrokeRecordings()` function with proper error handling
+- Enhanced tab structure with dynamic count display for writing sessions
+- Created detailed recording cards with analytics and action capabilities
+
+**Benefits for Educators**:
+- **Writing Behavior Insights**: Understand how students write and edit their work
+- **Performance Analytics**: View productivity metrics and engagement levels
+- **Session Tracking**: Monitor writing session frequency and duration
+- **Progress Monitoring**: Track improvements in writing speed and editing patterns
+
+This enhancement significantly expands the DocumentViewer's capability to provide comprehensive insights into student writing processes beyond just the final document content.
+
+**December 2024 - Enhanced Document Viewer with Analysis & Sessions ✅ COMPLETED**
+
+### Comprehensive Document Viewer Improvement
+**Enhancement Implemented**: Completely redesigned the admin DocumentViewer component to provide comprehensive document analysis and related information instead of just showing raw HTML markup.
+
+**Major Improvements Made**:
+1. **Fixed HTML Rendering**: Document content now properly renders HTML instead of showing markup
+   - Added safe HTML rendering with `dangerouslySetInnerHTML`
+   - Implemented HTML tag detection to choose between HTML and plain text rendering
+   - Added security by stripping inline styles
+   - Created fallback for server-side rendering
+
+2. **Added Comprehensive Text Analysis**: Real-time analysis using existing analysis functions
+   - **Overall Writing Score**: Combined assessment of writing quality
+   - **Grade Level Analysis**: Appropriate reading level for the text
+   - **Readability Metrics**: Flesch Reading Ease, sentence complexity, word difficulty
+   - **Vocabulary Analysis**: Academic vocabulary usage, diversity metrics
+   - **AI-Powered Insights**: Strengths and improvement recommendations
+   - **Detailed Metrics**: Comprehensive breakdown of writing statistics
+
+3. **Related Sessions & Chats Integration**: Contextual information display
+   - **AI Chat History**: Shows related tutor conversations for the document
+   - **Session Timeline**: When conversations occurred and message counts
+   - **Last Message Preview**: Quick view of recent interactions
+   - **Chat Navigation**: Easy access to view full conversation history
+
+**Technical Excellence**:
+- **Tabbed Interface**: Clean organization with Document Content, Text Analysis, and AI Chats tabs
+- **Real-time Analysis**: Performs text analysis on document load
+- **API Integration**: Uses multiple analysis endpoints for comprehensive insights
+- **Error Handling**: Graceful fallbacks when analysis services are unavailable
+- **Performance**: Efficient text processing with HTML parsing and cleanup
+
+**December 2024 - Admin Profile UI Improvement ✅ COMPLETED**
+
+### Removed Writing Sessions Tab from Admin Student Profile
+**Improvement Implemented**: Simplified the admin student profile interface by removing the "Writing Sessions" horizontal tab when viewing individual student profiles.
+
+**Changes Made**:
+1. **Tab Structure Simplified**: Reduced admin student profile from 4 tabs to 3 tabs
+   - Removed: "Writing Sessions" tab
+   - Kept: "Overview", "Documents", and "Progress Tracking" tabs
+   - Updated TabsList grid from `grid-cols-4` to `grid-cols-3`
+
+2. **Code Cleanup**: Removed all unused Writing Sessions related code
+   - Removed `WritingSession` interface definition
+   - Removed `writingSessions` state variable
+   - Removed `loadWritingSessions()` function
+   - Removed `handleViewWritingSession()` function
+   - Removed entire Writing Sessions TabsContent section
+   - Cleaned up references in Progress Summary
+
+**Benefits**:
+- **Simplified Interface**: Cleaner, more focused admin experience
+- **Reduced Cognitive Load**: Fewer tabs means easier navigation
+- **Better Performance**: Eliminated unnecessary data fetching and processing
+- **Maintainability**: Less code to maintain and fewer potential bugs
 
 ## Current Work Focus
 **Layout Improvements - Document Manager Integration** ✅ **COMPLETED**

@@ -47,23 +47,13 @@ interface StudentDocument {
   grammar_score?: number
 }
 
-interface WritingSession {
-  id: string
-  document_id: string
-  document_title: string
-  start_time: string
-  end_time: string
-  duration_minutes: number
-  keystrokes_count: number
-  words_written: number
-}
+
 
 export default function StudentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [student, setStudent] = useState<StudentDetail | null>(null)
   const [documents, setDocuments] = useState<StudentDocument[]>([])
-  const [writingSessions, setWritingSessions] = useState<WritingSession[]>([])
   const [activeTab, setActiveTab] = useState("overview")
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [showDocumentViewer, setShowDocumentViewer] = useState(false)
@@ -96,8 +86,7 @@ export default function StudentDetailPage() {
 
       await Promise.all([
         loadStudentInfo(),
-        loadStudentDocuments(),
-        loadWritingSessions()
+        loadStudentDocuments()
       ])
 
     } catch (err) {
@@ -197,26 +186,7 @@ export default function StudentDetailPage() {
     }
   }
 
-  const loadWritingSessions = async () => {
-    try {
-      // Mock writing sessions data (in real implementation, this would come from keystroke recordings)
-      const mockSessions: WritingSession[] = documents.slice(0, 5).map((doc, index) => ({
-        id: `session-${index}`,
-        document_id: doc.id,
-        document_title: doc.title,
-        start_time: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-        end_time: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000 + Math.random() * 2 * 60 * 60 * 1000).toISOString(),
-        duration_minutes: Math.floor(Math.random() * 120) + 15, // 15-135 minutes
-        keystrokes_count: Math.floor(Math.random() * 5000) + 500,
-        words_written: Math.floor(Math.random() * 500) + 100
-      }))
 
-      setWritingSessions(mockSessions)
-    } catch (err) {
-      console.error('Error loading writing sessions:', err)
-      setWritingSessions([])
-    }
-  }
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'Never'
@@ -270,10 +240,7 @@ export default function StudentDetailPage() {
     setShowDocumentViewer(true)
   }
 
-  const handleViewWritingSession = (sessionId: string) => {
-    // This would open the keystroke playback interface
-    console.log('View writing session:', sessionId)
-  }
+
 
   const handleDownloadReport = () => {
     // This would generate and download a student progress report
@@ -412,10 +379,9 @@ export default function StudentDetailPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
-            <TabsTrigger value="sessions">Writing Sessions</TabsTrigger>
             <TabsTrigger value="progress">Progress Tracking</TabsTrigger>
           </TabsList>
 
@@ -474,10 +440,7 @@ export default function StudentDetailPage() {
                       {student.documentsCount > 0 ? Math.round(student.totalWords / student.documentsCount) : 0}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Writing Sessions:</span>
-                    <span className="font-medium">{writingSessions.length}</span>
-                  </div>
+
                 </CardContent>
               </Card>
             </div>
@@ -571,53 +534,6 @@ export default function StudentDetailPage() {
                       <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No Documents Yet</h3>
                       <p className="text-gray-500">This student hasn't created any documents yet.</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="sessions" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Writing Sessions</CardTitle>
-                <CardDescription>Detailed keystroke recordings and writing analytics</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {writingSessions.map((session) => (
-                    <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center space-x-4">
-                        <Clock className="h-5 w-5 text-gray-500" />
-                        <div>
-                          <h3 className="font-medium">{session.document_title}</h3>
-                          <div className="flex items-center space-x-4 mt-1">
-                            <span className="text-sm text-gray-500">{session.duration_minutes} minutes</span>
-                            <span className="text-sm text-gray-500">•</span>
-                            <span className="text-sm text-gray-500">{session.words_written} words</span>
-                            <span className="text-sm text-gray-500">•</span>
-                            <span className="text-sm text-gray-500">{session.keystrokes_count} keystrokes</span>
-                            <span className="text-sm text-gray-500">•</span>
-                            <span className="text-sm text-gray-500">{formatDateTime(session.start_time)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewWritingSession(session.id)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Playback
-                      </Button>
-                    </div>
-                  ))}
-                  {writingSessions.length === 0 && (
-                    <div className="text-center py-12">
-                      <Clock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Writing Sessions</h3>
-                      <p className="text-gray-500">No keystroke recordings available for this student.</p>
                     </div>
                   )}
                 </div>

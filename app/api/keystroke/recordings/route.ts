@@ -64,7 +64,25 @@ export async function GET(request: NextRequest) {
     
     // If recordingId is provided, return single recording with events
     if (recordingId) {
-      return await getSingleRecordingWithEvents(supabase, user.id, recordingId);
+      // Check if user is admin to allow access to any recording
+      let userRole = { role: 'student' }; // Default to student access
+      
+      try {
+        const { data } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        if (data) {
+          userRole = data;
+        }
+      } catch (error: any) {
+        console.log('Warning: Could not fetch user role for recording access:', error?.message || error);
+      }
+
+      // If admin, allow access to any recording; if student, only their own recordings
+      const allowedUserId = userRole?.role === 'admin' ? null : user.id;
+      return await getSingleRecordingWithEvents(supabase, allowedUserId, recordingId);
     }
     
     // Temporarily bypass role check to avoid infinite recursion
@@ -87,24 +105,28 @@ export async function GET(request: NextRequest) {
 
     if (includeUserInfo && userRole?.role === 'admin') {
       // Admin view - return all student recordings
-      const { data: recordings, error } = await supabase
+      let query = supabase
         .from('keystroke_recordings')
-        .select(`
-          *,
-          profiles:user_id (email, full_name)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
+
+      // Filter by document if provided
+      if (documentId) {
+        query = query.eq('document_id', documentId);
+      }
+
+      const { data: recordings, error } = await query;
 
       if (error) {
         console.error('Error fetching admin recordings:', error);
         return NextResponse.json({ recordings: [] });
       }
 
-                   const formattedRecordings = recordings?.map((recording: any) => ({
+      const formattedRecordings = recordings?.map((recording: any) => ({
         id: recording.id,
         user_id: recording.user_id,
-        userName: recording.profiles?.full_name || 'Unknown User',
-        userEmail: recording.profiles?.email || 'unknown@email.com',
+        userName: 'Student', // Simplified for now since we don't need profile data in DocumentViewer
+        userEmail: 'student@example.com', // Simplified for now
         document_id: recording.document_id,
         documentTitle: recording.document_title || 'Untitled',
         session_id: recording.session_id,
@@ -200,17 +222,22 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to get single recording with events
-async function getSingleRecordingWithEvents(supabase: any, userId: string, recordingId: string) {
+async function getSingleRecordingWithEvents(supabase: any, userId: string | null, recordingId: string) {
   try {
-    console.log('Getting single recording for ID:', recordingId);
+    console.log('Getting single recording for ID:', recordingId, 'userId filter:', userId);
     
     // Fetch recording from database
-    const { data: recording, error: recordingError } = await supabase
+    let query = supabase
       .from('keystroke_recordings')
       .select('*')
-      .eq('id', recordingId)
-      .eq('user_id', userId)
-      .single();
+      .eq('id', recordingId);
+    
+    // Only filter by user_id if userId is provided (admin access when null)
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data: recording, error: recordingError } = await query.single();
 
     if (recordingError || !recording) {
       console.log('Recording not found:', recordingError);
@@ -224,15 +251,60 @@ async function getSingleRecordingWithEvents(supabase: any, userId: string, recor
     });
 
     // Try to fetch actual keystroke events from the database
-    const { data: events, error: eventsError } = await supabase
-      .from('keystroke_events')
-      .select('*')
-      .eq('recording_id', recording.id)
-      .order('sequence_number', { ascending: true });
+    let events, eventsError;
+    
+    if (userId === null) {
+      // Admin access - use server client with service role privileges
+      console.log('Admin access: fetching events with service role privileges');
+      
+      // Create a service role client for admin access
+      const { createClient } = await import('@supabase/supabase-js');
+      const serviceRoleClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
+        }
+      );
+      
+      const result = await serviceRoleClient
+        .from('keystroke_events')
+        .select('*')
+        .eq('recording_id', recording.id)
+        .order('sequence_number', { ascending: true });
+        
+      events = result.data;
+      eventsError = result.error;
+      
+      if (eventsError) {
+        console.error('Error fetching keystroke events for admin:', eventsError);
+      } else {
+        console.log(`Admin found ${events?.length || 0} keystroke events via service role`);
+      }
+    } else {
+      // Student access - use regular authenticated client
+      console.log('Student access: fetching events with user authentication');
+      const result = await supabase
+        .from('keystroke_events')
+        .select('*')
+        .eq('recording_id', recording.id)
+        .order('sequence_number', { ascending: true });
+        
+      events = result.data;
+      eventsError = result.error;
+      
+      if (eventsError) {
+        console.error('Error fetching keystroke events for student:', eventsError);
+      } else {
+        console.log(`Student found ${events?.length || 0} keystroke events`);
+      }
+    }
     
     if (eventsError) {
-      console.error('Error fetching keystroke events:', eventsError);
-      console.log(`Returning recording with 0 events due to error`);
+      console.log(`Returning recording with 0 events due to error: ${eventsError.message}`);
       
       return NextResponse.json({
         recording: {
@@ -253,6 +325,14 @@ async function getSingleRecordingWithEvents(supabase: any, userId: string, recor
     }
     
     console.log(`Found ${events?.length || 0} actual keystroke events for recording`);
+    console.log('Sample events:', events?.slice(0, 3).map((e: any) => ({
+      id: e.id,
+      sequence_number: e.sequence_number,
+      event_type: e.event_type,
+      key: e.key,
+      data: e.data,
+      encrypted_data: e.encrypted_data ? 'present' : 'missing'
+    })));
 
     return NextResponse.json({
       recording: {

@@ -139,6 +139,8 @@ export class KeystrokePlaybackEngine {
       const recordingData = data.recording;
       const eventsData = data.events || [];
       
+      console.log('🔍 Raw events data:', eventsData.slice(0, 3)); // Debug first 3 events
+      
       // Process events (no encryption/decryption)
       const processedEvents = eventsData.map((event: any) => {
         let originalData;
@@ -156,20 +158,36 @@ export class KeystrokePlaybackEngine {
             altKey: event.altKey || false,
             metaKey: event.metaKey || false
           };
+          console.log('✅ Using direct columns for event:', event.sequence_number, originalData);
         } else if (event.encrypted_data) {
           try {
             // Parse JSON data from encrypted_data field (fallback)
             let jsonString = event.encrypted_data;
             
-            // Check if it's hex-encoded (starts with \x)
-            if (jsonString.startsWith('\\x')) {
-              // Remove the \x prefix and decode from hex
-              const hexString = jsonString.substring(2);
-              // Decode hex to string (browser-compatible)
-              jsonString = hexString.match(/.{1,2}/g)?.map((byte: string) => String.fromCharCode(parseInt(byte, 16))).join('') || '';
+            // Handle different data formats
+            if (typeof jsonString === 'string') {
+              // Check if it's hex-encoded (starts with \x)
+              if (jsonString.startsWith('\\x')) {
+                // Remove the \x prefix and decode from hex
+                const hexString = jsonString.substring(2);
+                // Decode hex to string (browser-compatible)
+                jsonString = hexString.match(/.{1,2}/g)?.map((byte: string) => String.fromCharCode(parseInt(byte, 16))).join('') || '';
+              }
+              
+              // Try to parse as JSON
+              originalData = JSON.parse(jsonString);
+            } else if (typeof jsonString === 'object' && jsonString !== null) {
+              // Already an object, use directly
+              originalData = jsonString;
+            } else {
+              // Convert buffer/binary data to string and parse
+              const buffer = new Uint8Array(jsonString);
+              const textDecoder = new TextDecoder('utf-8');
+              const decodedString = textDecoder.decode(buffer);
+              originalData = JSON.parse(decodedString);
             }
             
-            originalData = JSON.parse(jsonString);
+            console.log('⚠️ Using encrypted_data for event:', event.sequence_number, originalData);
             
             // If the parsed data doesn't have key information, try to infer it from event type
             if (!originalData.key && !originalData.data) {
@@ -180,6 +198,9 @@ export class KeystrokePlaybackEngine {
               }
             }
           } catch (error) {
+            console.error('❌ Failed to parse encrypted_data:', error, event);
+            console.log('Raw encrypted_data type:', typeof event.encrypted_data);
+            console.log('Raw encrypted_data sample:', event.encrypted_data);
             originalData = { key: 'unknown', type: 'unknown' };
           }
         } else {
@@ -202,6 +223,8 @@ export class KeystrokePlaybackEngine {
         };
       });
 
+      console.log('🎯 Processed events sample:', processedEvents.slice(0, 3));
+
       // Sort events by sequence number
       processedEvents.sort((a: any, b: any) => a.sequenceNumber - b.sequenceNumber);
 
@@ -217,6 +240,13 @@ export class KeystrokePlaybackEngine {
         averageWpm: recordingData.average_wpm,
         events: processedEvents
       };
+
+      console.log('📊 Recording loaded:', {
+        id: this.recording.id,
+        title: this.recording.title,
+        eventCount: this.recording.events.length,
+        duration: this.recording.durationMs
+      });
 
       // Update state
       this.state.totalDuration = this.recording.durationMs;
@@ -488,6 +518,7 @@ export class KeystrokePlaybackEngine {
   private processEvent(event: PlaybackEvent): void {
     try {
       const { originalData } = event;
+      console.log('🎬 Processing event:', event.sequenceNumber, event.eventType, originalData);
       
       switch (event.eventType) {
         case 'keydown':
@@ -559,21 +590,30 @@ export class KeystrokePlaybackEngine {
    * Process input events
    */
   private processInputEvent(data: any): void {
+    console.log('⌨️ Processing input event:', data);
+    
     // Handle both new format (inputType) and recorded format (key-based)
     if (data.inputType === 'insertText' && data.data) {
+      console.log('⌨️ insertText with data:', data.data);
       this.insertText(data.data);
     } else if (data.inputType === 'deleteContentBackward') {
+      console.log('⌨️ deleteContentBackward');
       this.handleBackspace();
     } else if (data.inputType === 'deleteContentForward') {
+      console.log('⌨️ deleteContentForward');
       this.handleDelete();
     } else if (data.key && data.data && data.key !== 'Backspace' && data.key !== 'Delete' && data.key !== 'Enter' && data.key !== 'Tab') {
       // Handle recorded format: insert the character if it's a printable character
       if (data.data.length === 1 && data.data !== '\n' && data.data !== '\t') {
+        console.log('⌨️ Single character from data:', data.data);
         this.insertText(data.data);
       } else if (data.key.length === 1) {
         // Fallback to key if data is not available
+        console.log('⌨️ Single character from key:', data.key);
         this.insertText(data.key);
       }
+    } else {
+      console.log('⌨️ Unhandled input event:', data);
     }
   }
 
@@ -608,7 +648,9 @@ export class KeystrokePlaybackEngine {
    * Insert text at current cursor position
    */
   private insertText(text: string): void {
+    console.log('📝 Inserting text:', JSON.stringify(text), 'Current content length:', this.currentContent.length);
     this.currentContent += text;
+    console.log('📝 New content length:', this.currentContent.length, 'Preview:', this.currentContent.slice(-20));
     this.updateTargetElement(this.currentContent);
     
     this.contentHistory.push({
